@@ -2,6 +2,4 @@
 # Override global agent-kit settings for capital allocation analysis
 
 # Max iterations for complex multi-step analysis
-max_iterations: 25
-
-# Additional agent-specific settings can be added here
+max_iterations: 50

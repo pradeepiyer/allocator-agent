@@ -8,8 +8,8 @@ from agent_kit.clients.openai_client import OpenAIClient
 from agent_kit.config.config import get_config
 from agent_kit.prompts.loader import PromptLoader
 
-from allocator.models import SimilarStocksResult, StockAnalysis
-from allocator.tools import execute_tool, get_tool_definitions
+from agents.allocator.models import AllocatorReport, SimilarStocksResult, StockAnalysis
+from agents.allocator.tools import execute_tool, get_tool_definitions
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,8 @@ class AllocatorAgent(BaseAgent):
         """Initialize Allocator Agent."""
         super().__init__(openai_client)
 
-        # Register custom prompt directory for allocator-agent
+        # Register custom prompt directory for allocator agent
+        # prompts_root now points to agents/ directory which contains agents/allocator/prompts/
         prompts_root = Path(__file__).parent.parent
         self.prompt_loader = PromptLoader(search_paths=[prompts_root])
 
@@ -95,6 +96,38 @@ class AllocatorAgent(BaseAgent):
         )
 
         return response
+
+    async def generate_allocator_report(self, symbol: str, continue_conversation: bool = False) -> AllocatorReport:
+        """Generate comprehensive allocator report including stock analysis and similar stocks.
+
+        This is the unified analysis method that performs both comprehensive stock
+        analysis and finds similar companies, combining everything into one report.
+
+        Args:
+            symbol: Stock ticker symbol to analyze
+            continue_conversation: If True, continues previous conversation
+
+        Returns:
+            Unified report with analysis and similar stocks
+        """
+        logger.info(f"Generating allocator report for {symbol} (continue={continue_conversation})")
+
+        # First, perform comprehensive stock analysis
+        analysis = await self.analyze_stock(symbol, continue_conversation=continue_conversation)
+
+        # Then, find similar stocks (continue the conversation)
+        similar_result = await self.find_similar_stocks(symbol, continue_conversation=True)
+
+        # Combine into unified report
+        report = AllocatorReport(
+            symbol=symbol,
+            analysis=analysis,
+            similar_stocks=similar_result.similar_stocks,
+            sources=list(set(analysis.sources + similar_result.sources))  # Deduplicate sources
+        )
+
+        logger.info(f"Generated allocator report for {symbol} with {len(report.similar_stocks)} similar stocks")
+        return report
 
     async def process(self, query: str, continue_conversation: bool = False) -> str:
         """Process a general query with investment analysis context.

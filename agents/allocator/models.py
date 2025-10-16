@@ -49,3 +49,14 @@ class SimilarStocksResult(BaseModel):
     sources: list[str]
 
 
+class AllocatorReport(BaseModel):
+    """Comprehensive analysis report including stock analysis and similar stocks."""
+
+    model_config = {"extra": "forbid"}
+
+    symbol: str
+    analysis: StockAnalysis
+    similar_stocks: list[SimilarStock]
+    sources: list[str]
+
+

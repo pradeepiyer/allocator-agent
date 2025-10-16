@@ -66,15 +66,14 @@ Financial data tools in `tools.py`:
 - `get_valuation_metrics()` - P/E, P/B, P/S, EV/EBITDA
 - `get_financial_history()` - Multi-year trends
 - `calculate_similarity()` - Stock comparison scores
-- `screen_stocks()` - Placeholder (requires paid API)
 
 ## Development Guidelines
 - Follow agent-kit patterns (async, Pydantic, Responses API)
 - Brief comments, contextual docstrings
 - Run commands under uv: `uv run python -m allocator.main`
 - Use `make lint` before committing
-- Web search citations: [1], [2] with Sources section
 - YAML prompts use markdown headers for structure
+- Don't commit changes by default. I want to review them
 
 ## Testing
 ```bash

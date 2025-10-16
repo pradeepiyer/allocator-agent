@@ -15,25 +15,33 @@ Allocator Agent is built on [agent-kit](https://github.com/pradeepiyer/agent-kit
 
 ## Features
 
-### 🎯 Two Core Capabilities
+### 🎯 Comprehensive Allocator Report (`/analyse`)
 
-1. **Comprehensive Stock Analysis** (`/analyze`)
-   - Deep dive on any stock covering all investment principles
-   - Management quality and insider ownership analysis
-   - Capital allocation track record
-   - Financial metrics and trends
-   - Competitive position assessment
-   - Valuation analysis
-   - Technical indicators
-   - Clear investment recommendation
+Generate a complete investment analysis combining stock analysis and similar company discovery in one unified report:
 
-2. **Similar Stock Finder** (`/similar`)
-   - Find stocks with similar characteristics
-   - Programmatic discovery using sector/industry classification
-   - Multi-dimensional comparison (business model, financials, management, etc.)
-   - Ranked results with similarity scores (sector, industry, market cap, margins, growth, ROE)
-   - Identifies both obvious and non-obvious comparables
-   - Filters candidates by market cap range (0.3x-3x) for relevance
+**Stock Analysis**
+- Deep dive covering all investment principles
+- Management quality and insider ownership
+- Capital allocation track record
+- Financial metrics (ROIC, ROE, margins, growth)
+- Competitive position and moat assessment
+- Valuation analysis with multiples
+- Technical indicators and trends
+- Clear investment recommendation
+
+**Similar Companies**
+- Programmatic discovery using sector/industry classification
+- Multi-dimensional comparison (business model, financials, management)
+- Ranked results with similarity scores (sector, industry, market cap, margins, growth, ROE)
+- Identifies both obvious and non-obvious comparables
+- Filters by market cap range (0.3x-3x) for relevance
+
+**PDF Export**
+- Professional report with quantitative metrics tables
+- Unified comparison table showing all metrics (financial, valuation, technical, ownership) for reference stock and similar stocks side-by-side
+- Price charts with moving averages
+- Similarity comparison visualizations
+- Reports saved to `reports/` directory
 
 ### 🛠️ Data Sources
 
@@ -93,17 +101,23 @@ uv run python -m allocator.main
 
 ### Slash Commands
 
-#### Analyze a Stock
+#### Generate Allocator Report
 ```
-/analyze AAPL
+/analyse AAPL
 ```
-Provides comprehensive analysis of Apple covering all investment principles.
+Generates a comprehensive allocator report for Apple including:
+- Full investment analysis across all principles
+- Similar companies with similarity scores
+- All metrics displayed in console output
+- **Automatic PDF export** to `reports/allocator-AAPL-{timestamp}.pdf`
 
-#### Find Similar Stocks
-```
-/similar MSFT
-```
-Finds stocks similar to Microsoft based on multiple dimensions.
+The PDF report includes:
+- Executive summary with recommendation
+- Unified comparison table showing all metrics for reference stock and similar stocks (financial, valuation, technical, ownership)
+- Price chart with 50/200-day moving averages
+- Full analysis text
+- Similar stocks with comparison chart
+- All sources cited
 
 ### Chat Mode
 
@@ -173,16 +187,19 @@ The agent analyzes stocks using these key principles:
 
 ```
 allocator-agent/
-├── allocator/
-│   ├── __init__.py
-│   ├── agent.py           # AllocatorAgent class with 2 main methods
-│   ├── tools.py           # 10 financial data tools (yfinance-based)
-│   ├── console.py         # Console interface with slash commands
-│   ├── main.py            # Entry point
-│   ├── config.yaml        # Agent configuration
-│   └── prompts/           # Investment principle prompts
-│       ├── analyzer.yaml       # General analysis
-│       └── similarity.yaml     # Similar stock finding
+├── agents/
+│   └── allocator/
+│       ├── __init__.py
+│       ├── agent.py           # AllocatorAgent with generate_allocator_report()
+│       ├── tools.py           # 10 financial data tools (yfinance-based)
+│       ├── models.py          # AllocatorReport, StockAnalysis, SimilarStock
+│       ├── export.py          # PDF generation with metrics tables
+│       ├── console.py         # Console with /analyse command and automatic PDF export
+│       ├── main.py            # Entry point
+│       ├── config.yaml        # Agent configuration
+│       └── prompts/           # Investment principle prompts
+│           ├── analyzer.yaml       # Stock analysis
+│           └── similarity.yaml     # Similar stock finding
 ├── pyproject.toml         # Dependencies (agent-kit, yfinance, etc.)
 └── README.md
 ```
@@ -208,7 +225,7 @@ Plus built-in `web_search` for news, filings, and qualitative research.
 
 ### Agent Configuration
 
-Edit `allocator/config.yaml` or create `~/.agent-kit/allocator.yaml`:
+The agent config is in `agents/allocator/config.yaml` and will be auto-loaded by agent-kit.
 
 ```yaml
 max_iterations: 25  # Allows for complex multi-step analysis
@@ -260,37 +277,51 @@ No changes to agent logic required - tools are automatically available to LLM.
 
 ## Examples
 
-### Example: Comprehensive Analysis
+### Example: Comprehensive Allocator Report
 ```
-/analyze BRK.B
+/analyse BRK.B
 
-Result: Deep analysis of Berkshire Hathaway covering:
+Result: Complete allocator report with:
+
+Part 1 - Stock Analysis:
 - Buffett/Munger's capital allocation track record
 - Insurance float as competitive advantage
 - Ownership of wholly-owned subsidiaries
+- Key Metrics (ROIC, ROE, margins, valuation multiples)
 - Valuation vs book value
-- Recent portfolio changes
-- Investment recommendation
+- Investment recommendation: Buy (High conviction)
+
+Part 2 - Similar Companies:
+1. MKL (Markel) - Similar insurance + investment model (Similarity: 78)
+2. FFH (Fairfax Financial) - Comparable structure (Similarity: 72)
+3. Y (Alleghany) - Insurance conglomerate (Similarity: 65)
+Each with detailed similarity analysis
 ```
 
-### Example: Find Similar Stocks
+### Example: Workflow
 ```
-/similar COST
+/analyse AAPL
 
-Result: Stocks similar to Costco:
-1. WMT (Walmart) - Similar retail, different model
-2. TGT (Target) - Comparable margins, different positioning
-3. AMZN (Amazon) - E-commerce overlap
-Each with similarity scores and comparison
+▶ Generating comprehensive report for AAPL...
+
+... analysis output displayed in console ...
+
+▶ Generating PDF report...
+✓ PDF report saved to reports/allocator-AAPL-20251016-143052.pdf
+
+# Now you have both:
+# 1. Console output for immediate reading
+# 2. Professional PDF report for review/sharing
 ```
 
 ## Tips for Best Results
 
-1. **Be specific**: "Analyze AAPL's capital allocation over the last 5 years" is better than just "AAPL"
-2. **Use follow-ups**: The agent maintains conversation context - ask follow-up questions
-3. **Combine analysis**: "Compare GOOGL and META, then find 3 similar stocks"
-4. **Provide context**: "Looking for value stocks in technology" helps screening
-5. **Check sources**: Agent cites sources - verify important claims
+1. **Use `/analyse` for comprehensive reports**: Gets you analysis, similar companies, and PDF report automatically
+2. **Review the PDF**: Contains unified comparison table and charts for deeper analysis
+3. **Use chat for specific questions**: "What's AAPL's ROIC?" or "Compare GOOGL and META's capital allocation"
+4. **Check comparison table in PDF**: Shows all metrics for reference stock and similar stocks side-by-side
+5. **Explore similar companies**: Often reveals non-obvious investment alternatives
+6. **Verify sources**: Agent cites all sources - always verify important claims
 
 ## Limitations
 

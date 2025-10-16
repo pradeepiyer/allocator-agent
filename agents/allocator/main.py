@@ -5,7 +5,7 @@ import logging
 import sys
 
 from agent_kit.api.console.server import run_console
-from allocator.console import AllocatorCommands
+from agents.allocator.console import AllocatorCommands
 
 
 def setup_logging():

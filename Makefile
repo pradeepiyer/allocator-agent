@@ -62,7 +62,7 @@ sync-deps:
 # Run interactive allocator agent console
 console:
 	@echo "💰 Starting Allocator Agent console..."
-	uv run python -m allocator.main
+	uv run python -m agents.allocator.main
 
 # Count lines of code in the repository
 wc:

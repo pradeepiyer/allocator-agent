@@ -1,11 +1,9 @@
 """Allocator Agent - Capital allocation and stock analysis agent."""
 
-from allocator.agent import AllocatorAgent
-from allocator.export import (
-    export_similar_stocks_pdf,
-    export_stock_analysis_pdf,
-)
-from allocator.models import (
+from agents.allocator.agent import AllocatorAgent
+from agents.allocator.export import export_allocator_report_pdf
+from agents.allocator.models import (
+    AllocatorReport,
     SimilarStock,
     SimilarStocksResult,
     StockAnalysis,
@@ -16,7 +14,7 @@ __all__ = [
     "StockAnalysis",
     "SimilarStock",
     "SimilarStocksResult",
-    "export_stock_analysis_pdf",
-    "export_similar_stocks_pdf",
+    "AllocatorReport",
+    "export_allocator_report_pdf",
 ]
 __version__ = "0.1.0"

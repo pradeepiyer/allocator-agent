@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-allocator-agent = "allocator.main:main"
+allocator-agent = "agents.allocator.main:main"
 
 [tool.uv]
 package = true
@@ -25,10 +25,10 @@ package = true
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["allocator*"]
+include = ["agents*"]
 
 [tool.setuptools.package-data]
-allocator = [
+"agents.allocator" = [
     "*.yaml",
     "prompts/**/*.yaml",
 ]

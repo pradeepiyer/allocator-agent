@@ -35,13 +35,17 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
         stock = yf.Ticker(symbol)
         info = stock.info
 
-        # Get financial statements for ROIC calculation
+        # Get financial statements for ROIC calculation and cash flow metrics
+        roic = None
+        free_cash_flow = None
+        operating_cash_flow = None
+
         try:
             balance_sheet = stock.balance_sheet
             financials = stock.financials
+            cash_flow = stock.cashflow
 
             # Calculate ROIC if data available
-            roic = None
             if not balance_sheet.empty and not financials.empty:
                 # ROIC = NOPAT / Invested Capital
                 # Simplified: Operating Income * (1 - tax rate) / (Total Assets - Current Liabilities)
@@ -57,9 +61,27 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
                         roic = (nopat / invested_capital) if invested_capital > 0 else None
                 except Exception as e:
                     logger.debug(f"Could not calculate ROIC for {symbol}: {e}")
+
+            # Get cash flow metrics from annual statement (more stable than TTM)
+            if not cash_flow.empty:
+                try:
+                    if 'Free Cash Flow' in cash_flow.index:
+                        fcf_value = cash_flow.loc['Free Cash Flow'].iloc[0]
+                        if pd.notna(fcf_value):
+                            free_cash_flow = float(fcf_value)
+                except Exception as e:
+                    logger.debug(f"Could not fetch annual FCF for {symbol}: {e}")
+
+                try:
+                    if 'Operating Cash Flow' in cash_flow.index:
+                        ocf_value = cash_flow.loc['Operating Cash Flow'].iloc[0]
+                        if pd.notna(ocf_value):
+                            operating_cash_flow = float(ocf_value)
+                except Exception as e:
+                    logger.debug(f"Could not fetch annual OCF for {symbol}: {e}")
+
         except Exception as e:
             logger.debug(f"Could not fetch financial statements for {symbol}: {e}")
-            roic = None
 
         return {
             "symbol": symbol,
@@ -84,9 +106,9 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
             "total_cash": info.get("totalCash"),
             "total_debt": info.get("totalDebt"),
 
-            # Cash Flow
-            "free_cash_flow": info.get("freeCashflow"),
-            "operating_cash_flow": info.get("operatingCashflow"),
+            # Cash Flow (prefer annual from statement, fallback to TTM from info)
+            "free_cash_flow": free_cash_flow if free_cash_flow is not None else info.get("freeCashflow"),
+            "operating_cash_flow": operating_cash_flow if operating_cash_flow is not None else info.get("operatingCashflow"),
 
             # Growth
             "revenue_growth": info.get("revenueGrowth"),
@@ -601,8 +623,9 @@ async def find_similar_companies(symbol: str, limit: int = 10) -> dict[str, Any]
                 try:
                     industry = yf.Industry(industry_key)
                     top_companies = industry.top_companies
-                    if not top_companies.empty and 'symbol' in top_companies.columns:
-                        candidates.extend(top_companies['symbol'].tolist())
+                    if not top_companies.empty:
+                        # Symbols are in the DataFrame index, not a column
+                        candidates.extend(top_companies.index.tolist())
                         logger.info(f"Found {len(candidates)} companies from industry {industry_key}")
                 except Exception as e:
                     logger.debug(f"Could not fetch industry companies: {e}")
@@ -613,8 +636,9 @@ async def find_similar_companies(symbol: str, limit: int = 10) -> dict[str, Any]
                 try:
                     sector = yf.Sector(sector_key)
                     top_companies = sector.top_companies
-                    if not top_companies.empty and 'symbol' in top_companies.columns:
-                        sector_symbols = top_companies['symbol'].tolist()
+                    if not top_companies.empty:
+                        # Symbols are in the DataFrame index, not a column
+                        sector_symbols = top_companies.index.tolist()
                         # Add sector companies not already in candidates
                         candidates.extend([s for s in sector_symbols if s not in candidates])
                         logger.info(f"Total {len(candidates)} companies after adding sector {sector_key}")
