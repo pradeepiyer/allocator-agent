@@ -1,5 +1,6 @@
 """Console interface for Allocator Agent with custom slash commands."""
 
+from pathlib import Path
 from typing import cast
 
 from rich.console import Console
@@ -244,20 +245,25 @@ class AllocatorCommands(SlashCommands):
             else:  # SimilarStocksResult
                 filename = f"similar-{self.last_symbol}-{timestamp}.pdf"
 
+        # Create reports directory and prepend to filename
+        reports_dir = Path("reports")
+        reports_dir.mkdir(exist_ok=True)
+        filepath = reports_dir / filename
+
         try:
             from allocator.export import (
                 export_similar_stocks_pdf,
                 export_stock_analysis_pdf,
             )
 
-            self.console.print(f"[dim]▶ Exporting to {filename}...[/dim]")
+            self.console.print(f"[dim]▶ Exporting to {filepath}...[/dim]")
 
             if isinstance(self.last_result, StockAnalysis):
-                export_stock_analysis_pdf(self.last_result, filename, self.last_symbol or "UNKNOWN")
+                export_stock_analysis_pdf(self.last_result, str(filepath), self.last_symbol or "UNKNOWN")
             else:  # SimilarStocksResult
-                export_similar_stocks_pdf(self.last_result, filename)
+                export_similar_stocks_pdf(self.last_result, str(filepath))
 
-            self.console.print(f"[green]✓ Exported to {filename}[/green]")
+            self.console.print(f"[green]✓ Exported to {filepath}[/green]")
             self.console.print()
         except Exception as e:
             self.console.print(f"[red]Error exporting PDF: {e}[/red]")

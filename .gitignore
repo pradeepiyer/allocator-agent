@@ -74,6 +74,7 @@ logs/
 
 # Generated PDF files
 *.pdf
+reports/
 
 # Debug files
 /tmp/allocator-agent-prompts/
