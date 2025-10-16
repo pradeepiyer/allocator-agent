@@ -1,0 +1,62 @@
+[project]
+name = "allocator-agent"
+version = "0.1.0"
+description = "AI agent for capital allocation and stock analysis"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "agent-kit @ git+https://github.com/pradeepiyer/agent-kit.git",
+    "yfinance>=0.2.50",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "pandas-ta>=0.3.14b",
+    "aiohttp>=3.12.15",
+    "reportlab>=4.0.0",
+    "matplotlib>=3.8.0",
+]
+
+[project.scripts]
+allocator-agent = "allocator.main:main"
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["allocator*"]
+
+[tool.setuptools.package-data]
+allocator = [
+    "*.yaml",
+    "prompts/**/*.yaml",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.406",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.8",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = true
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "UP",  # pyupgrade
+    "RUF", # ruff-specific rules
+]
+ignore = ["E501"]  # Line too long - handled by formatter
