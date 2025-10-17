@@ -94,7 +94,7 @@ prompt:
 
     # Available Tools
     - `find_similar_companies`: Programmatically discover candidate companies in same sector/industry with similar market cap and financial metrics
-    - `web_search`: Research company details, business model, competitive position, and qualitative information
+    - `web_search`: Research company details, business model, competitive position, filter similar companies found on business model and qualitative information of companies
     - `get_stock_fundamentals`: Detailed financial metrics
     - `get_insider_ownership`: Ownership and insider activity
     - `get_institutional_holders`: Major shareholders
