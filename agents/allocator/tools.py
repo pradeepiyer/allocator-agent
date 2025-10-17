@@ -672,23 +672,22 @@ async def find_similar_companies(symbol: str, limit: int = 10) -> dict[str, Any]
                 if not cand_market_cap:
                     continue
 
-                # Filter by market cap range (0.3x - 3x reference)
+                # Filter by market cap range (0.1x - 2x reference)
                 market_cap_ratio = cand_market_cap / ref_market_cap
-                if market_cap_ratio < 0.3 or market_cap_ratio > 3.0:
+                if market_cap_ratio < 0.1 or market_cap_ratio > 2.0:
                     continue
 
                 # Calculate multi-dimensional similarity score
                 score = 0.0
                 weights = {}
 
-                # Sector match (30 points)
-                if cand_fund.get("sector") == ref_sector:
-                    score += 30
-                    weights["sector_match"] = True
-                else:
-                    weights["sector_match"] = False
+                # Sector match required (skip if different sector)
+                if cand_fund.get("sector") != ref_sector:
+                    continue
+                score += 50
+                weights["sector_match"] = True
 
-                # Industry match (20 points)
+                # Industry match (20 points bonus, not required)
                 if cand_fund.get("industry") == ref_industry:
                     score += 20
                     weights["industry_match"] = True
@@ -697,7 +696,7 @@ async def find_similar_companies(symbol: str, limit: int = 10) -> dict[str, Any]
 
                 # Market cap similarity (20 points)
                 # Score decreases as ratio diverges from 1.0
-                mc_similarity = 20 * (1 - abs(np.log10(market_cap_ratio)) / np.log10(3.0))
+                mc_similarity = 20 * (1 - abs(np.log10(market_cap_ratio)) / np.log10(2.0))
                 score += max(0, mc_similarity)
                 weights["market_cap_similarity"] = round(mc_similarity, 2)
 
