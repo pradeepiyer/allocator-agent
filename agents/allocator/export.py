@@ -32,26 +32,28 @@ def _register_unicode_fonts():
     """Register DejaVu fonts bundled with matplotlib for Unicode support.
 
     Registers DejaVu Sans font family to support Unicode characters like
-    en dash (–), em dash (—), and other special characters that Helvetica
+    en dash (-), em dash (-), and other special characters that Helvetica
     doesn't support.
     """
     try:
         # Get path to matplotlib's bundled DejaVu fonts
-        dejavu_path = Path(font_manager.findfont(font_manager.FontProperties(family='DejaVu Sans')))
+        dejavu_path = Path(font_manager.findfont(font_manager.FontProperties(family="DejaVu Sans")))
         dejavu_dir = dejavu_path.parent
 
         # Register font family variants
-        pdfmetrics.registerFont(TTFont('DejaVuSans', str(dejavu_dir / 'DejaVuSans.ttf')))
-        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', str(dejavu_dir / 'DejaVuSans-Bold.ttf')))
-        pdfmetrics.registerFont(TTFont('DejaVuSans-Oblique', str(dejavu_dir / 'DejaVuSans-Oblique.ttf')))
-        pdfmetrics.registerFont(TTFont('DejaVuSans-BoldOblique', str(dejavu_dir / 'DejaVuSans-BoldOblique.ttf')))
+        pdfmetrics.registerFont(TTFont("DejaVuSans", str(dejavu_dir / "DejaVuSans.ttf")))
+        pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", str(dejavu_dir / "DejaVuSans-Bold.ttf")))
+        pdfmetrics.registerFont(TTFont("DejaVuSans-Oblique", str(dejavu_dir / "DejaVuSans-Oblique.ttf")))
+        pdfmetrics.registerFont(TTFont("DejaVuSans-BoldOblique", str(dejavu_dir / "DejaVuSans-BoldOblique.ttf")))
 
         # Register font family for automatic bold/italic switching
-        registerFontFamily('DejaVuSans',
-                          normal='DejaVuSans',
-                          bold='DejaVuSans-Bold',
-                          italic='DejaVuSans-Oblique',
-                          boldItalic='DejaVuSans-BoldOblique')
+        registerFontFamily(
+            "DejaVuSans",
+            normal="DejaVuSans",
+            bold="DejaVuSans-Bold",
+            italic="DejaVuSans-Oblique",
+            boldItalic="DejaVuSans-BoldOblique",
+        )
 
         logger.info(f"Registered DejaVu fonts from {dejavu_dir}")
     except Exception as e:
@@ -77,12 +79,7 @@ async def _fetch_metrics(symbol: str) -> dict:
         technical = await get_technical_indicators(symbol)
         ownership = await get_insider_ownership(symbol)
 
-        return {
-            "fundamentals": fundamentals,
-            "valuation": valuation,
-            "technical": technical,
-            "ownership": ownership,
-        }
+        return {"fundamentals": fundamentals, "valuation": valuation, "technical": technical, "ownership": ownership}
     except Exception as e:
         logger.error(f"Error fetching metrics for {symbol}: {e}")
         return {}
@@ -255,7 +252,11 @@ async def _create_unified_comparison_table(report: AllocatorReport) -> Table:
     ]
 
     # Bold section headers
-    section_rows = [i for i, row in enumerate(table_data) if row[0] in ["FINANCIAL METRICS", "VALUATION METRICS", "TECHNICAL INDICATORS", "OWNERSHIP"]]
+    section_rows = [
+        i
+        for i, row in enumerate(table_data)
+        if row[0] in ["FINANCIAL METRICS", "VALUATION METRICS", "TECHNICAL INDICATORS", "OWNERSHIP"]
+    ]
     for row_idx in section_rows:
         style_commands.append(("FONTNAME", (0, row_idx), (-1, row_idx), "DejaVuSans-Bold"))
         style_commands.append(("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#f0f0f0")))
@@ -332,23 +333,17 @@ async def export_allocator_report_pdf(report: AllocatorReport, filename: str) ->
 
     # Custom styles with Unicode font
     title_style = ParagraphStyle(
-        "CustomTitle", parent=styles_dict["Heading1"], fontSize=24, textColor=colors.HexColor("#1f77b4"), spaceAfter=12,
-        fontName='DejaVuSans-Bold'
+        "CustomTitle",
+        parent=styles_dict["Heading1"],
+        fontSize=24,
+        textColor=colors.HexColor("#1f77b4"),
+        spaceAfter=12,
+        fontName="DejaVuSans-Bold",
     )
-    heading_style = ParagraphStyle("CustomHeading", parent=styles_dict["Heading2"], fontSize=16, spaceAfter=10,
-        fontName='DejaVuSans-Bold'
+    heading_style = ParagraphStyle(
+        "CustomHeading", parent=styles_dict["Heading2"], fontSize=16, spaceAfter=10, fontName="DejaVuSans-Bold"
     )
-    subheading_style = ParagraphStyle("CustomSubheading", parent=styles_dict["Heading3"], fontSize=12, spaceAfter=8,
-        fontName='DejaVuSans-Bold'
-    )
-    body_style = ParagraphStyle("DejaVuBody", parent=styles_dict["BodyText"], fontName='DejaVuSans')
-
-    styles = {
-        "title": title_style,
-        "heading": heading_style,
-        "subheading": subheading_style,
-        "body": body_style,
-    }
+    body_style = ParagraphStyle("DejaVuBody", parent=styles_dict["BodyText"], fontName="DejaVuSans")
 
     analysis = report.analysis
 
@@ -369,16 +364,18 @@ async def export_allocator_report_pdf(report: AllocatorReport, filename: str) ->
     ]
     rec_table = Table(rec_data, colWidths=[2.0 * inch, 4 * inch])
     rec_table.setStyle(
-        TableStyle([
-            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f0f0")),
-            ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("FONTNAME", (0, 0), (0, -1), "DejaVuSans-Bold"),
-            ("FONTNAME", (1, 0), (1, -1), "DejaVuSans"),
-            ("FONTSIZE", (0, 0), (-1, -1), 12),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
-        ])
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f0f0")),
+                ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("FONTNAME", (0, 0), (0, -1), "DejaVuSans-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "DejaVuSans"),
+                ("FONTSIZE", (0, 0), (-1, -1), 12),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ]
+        )
     )
     story.append(rec_table)
     story.append(Spacer(1, 0.3 * inch))

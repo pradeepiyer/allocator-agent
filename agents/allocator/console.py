@@ -22,7 +22,7 @@ class AllocatorCommands(SlashCommands):
             "/analyse",
             self._handle_analyse,
             "Generate comprehensive allocator report with PDF",
-            "Comprehensive analysis with similar stocks and PDF export\nUsage: /analyse <symbol>\nExample: /analyse AAPL"
+            "Comprehensive analysis with similar stocks and PDF export\nUsage: /analyse <symbol>\nExample: /analyse AAPL",
         )
 
     def _format_allocator_report(self, report: AllocatorReport) -> str:
@@ -67,11 +67,13 @@ class AllocatorCommands(SlashCommands):
         if report.similar_stocks:
             lines.extend(["", "", "# Similar Stocks", ""])
             for i, stock in enumerate(report.similar_stocks, 1):
-                lines.extend([
-                    f"## {i}. {stock.symbol} - {stock.company_name} (Similarity: {stock.similarity_score}/100)",
-                    "",
-                    "### Key Similarities",
-                ])
+                lines.extend(
+                    [
+                        f"## {i}. {stock.symbol} - {stock.company_name} (Similarity: {stock.similarity_score}/100)",
+                        "",
+                        "### Key Similarities",
+                    ]
+                )
                 for sim in stock.key_similarities:
                     lines.append(f"- {sim}")
 
@@ -79,12 +81,7 @@ class AllocatorCommands(SlashCommands):
                 for diff in stock.key_differences:
                     lines.append(f"- {diff}")
 
-                lines.extend([
-                    "",
-                    "### Relative Attractiveness",
-                    stock.relative_attractiveness,
-                    "",
-                ])
+                lines.extend(["", "### Relative Attractiveness", stock.relative_attractiveness, ""])
 
         # Add sources
         if report.sources:
@@ -162,7 +159,7 @@ class AllocatorCommands(SlashCommands):
             reports_dir.mkdir(exist_ok=True)
             filepath = reports_dir / filename
 
-            self.console.print(f"[dim]▶ Generating PDF report...[/dim]")
+            self.console.print("[dim]▶ Generating PDF report...[/dim]")
             await export_allocator_report_pdf(report, str(filepath))
             self.console.print(f"[green]✓ PDF report saved to {filepath}[/green]")
             self.console.print()

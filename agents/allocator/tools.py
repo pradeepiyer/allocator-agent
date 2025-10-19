@@ -1,7 +1,6 @@
 """Financial data tools for Allocator Agent using yfinance."""
 
 import logging
-from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -15,7 +14,7 @@ def _safe_date_str(value: Any) -> str | None:
     """Convert datetime/Timestamp to string safely."""
     if pd.isna(value) or value is None:
         return None
-    if hasattr(value, 'date'):
+    if hasattr(value, "date"):
         return str(value.date())
     return str(value)
 
@@ -50,12 +49,20 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
                 # ROIC = NOPAT / Invested Capital
                 # Simplified: Operating Income * (1 - tax rate) / (Total Assets - Current Liabilities)
                 try:
-                    operating_income = financials.loc['Operating Income'].iloc[0] if 'Operating Income' in financials.index else None
-                    total_assets = balance_sheet.loc['Total Assets'].iloc[0] if 'Total Assets' in balance_sheet.index else None
-                    current_liabilities = balance_sheet.loc['Current Liabilities'].iloc[0] if 'Current Liabilities' in balance_sheet.index else None
+                    operating_income = (
+                        financials.loc["Operating Income"].iloc[0] if "Operating Income" in financials.index else None
+                    )
+                    total_assets = (
+                        balance_sheet.loc["Total Assets"].iloc[0] if "Total Assets" in balance_sheet.index else None
+                    )
+                    current_liabilities = (
+                        balance_sheet.loc["Current Liabilities"].iloc[0]
+                        if "Current Liabilities" in balance_sheet.index
+                        else None
+                    )
 
                     if operating_income and total_assets and current_liabilities:
-                        tax_rate = info.get('effectiveTaxRate', 0.21)
+                        tax_rate = info.get("effectiveTaxRate", 0.21)
                         nopat = operating_income * (1 - tax_rate)
                         invested_capital = total_assets - current_liabilities
                         roic = (nopat / invested_capital) if invested_capital > 0 else None
@@ -65,16 +72,16 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
             # Get cash flow metrics from annual statement (more stable than TTM)
             if not cash_flow.empty:
                 try:
-                    if 'Free Cash Flow' in cash_flow.index:
-                        fcf_value = cash_flow.loc['Free Cash Flow'].iloc[0]
+                    if "Free Cash Flow" in cash_flow.index:
+                        fcf_value = cash_flow.loc["Free Cash Flow"].iloc[0]
                         if pd.notna(fcf_value):
                             free_cash_flow = float(fcf_value)
                 except Exception as e:
                     logger.debug(f"Could not fetch annual FCF for {symbol}: {e}")
 
                 try:
-                    if 'Operating Cash Flow' in cash_flow.index:
-                        ocf_value = cash_flow.loc['Operating Cash Flow'].iloc[0]
+                    if "Operating Cash Flow" in cash_flow.index:
+                        ocf_value = cash_flow.loc["Operating Cash Flow"].iloc[0]
                         if pd.notna(ocf_value):
                             operating_cash_flow = float(ocf_value)
                 except Exception as e:
@@ -90,7 +97,6 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
             "industry": info.get("industry", "N/A"),
             "market_cap": info.get("marketCap"),
             "enterprise_value": info.get("enterpriseValue"),
-
             # Profitability & Returns
             "roic": roic,
             "roe": info.get("returnOnEquity"),
@@ -98,22 +104,20 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
             "profit_margin": info.get("profitMargins"),
             "operating_margin": info.get("operatingMargins"),
             "gross_margin": info.get("grossMargins"),
-
             # Balance Sheet
             "debt_to_equity": info.get("debtToEquity"),
             "current_ratio": info.get("currentRatio"),
             "quick_ratio": info.get("quickRatio"),
             "total_cash": info.get("totalCash"),
             "total_debt": info.get("totalDebt"),
-
             # Cash Flow (prefer annual from statement, fallback to TTM from info)
             "free_cash_flow": free_cash_flow if free_cash_flow is not None else info.get("freeCashflow"),
-            "operating_cash_flow": operating_cash_flow if operating_cash_flow is not None else info.get("operatingCashflow"),
-
+            "operating_cash_flow": operating_cash_flow
+            if operating_cash_flow is not None
+            else info.get("operatingCashflow"),
             # Growth
             "revenue_growth": info.get("revenueGrowth"),
             "earnings_growth": info.get("earningsGrowth"),
-
             # Additional metrics
             "beta": info.get("beta"),
             "52_week_high": info.get("fiftyTwoWeekHigh"),
@@ -148,13 +152,15 @@ async def get_insider_ownership(symbol: str) -> dict[str, Any]:
                 # Get recent transactions (last 6 months)
                 recent_txns = insider_txns.head(20)  # Latest 20 transactions
                 for _, txn in recent_txns.iterrows():
-                    insider_transactions.append({
-                        "date": _safe_date_str(txn.get("Start Date")),
-                        "insider": txn.get("Insider Trading"),
-                        "shares": txn.get("Shares"),
-                        "value": txn.get("Value"),
-                        "transaction": txn.get("Transaction"),
-                    })
+                    insider_transactions.append(
+                        {
+                            "date": _safe_date_str(txn.get("Start Date")),
+                            "insider": txn.get("Insider Trading"),
+                            "shares": txn.get("Shares"),
+                            "value": txn.get("Value"),
+                            "transaction": txn.get("Transaction"),
+                        }
+                    )
         except Exception as e:
             logger.debug(f"Could not fetch insider transactions for {symbol}: {e}")
 
@@ -192,13 +198,15 @@ async def get_institutional_holders(symbol: str) -> dict[str, Any]:
             holders = stock.institutional_holders
             if not holders.empty:
                 for _, holder in holders.iterrows():
-                    institutional_holders.append({
-                        "holder": holder.get("Holder"),
-                        "shares": holder.get("Shares"),
-                        "date_reported": _safe_date_str(holder.get("Date Reported")),
-                        "pct_out": holder.get("% Out"),
-                        "value": holder.get("Value"),
-                    })
+                    institutional_holders.append(
+                        {
+                            "holder": holder.get("Holder"),
+                            "shares": holder.get("Shares"),
+                            "date_reported": _safe_date_str(holder.get("Date Reported")),
+                            "pct_out": holder.get("% Out"),
+                            "value": holder.get("Value"),
+                        }
+                    )
         except Exception as e:
             logger.debug(f"Could not fetch institutional holders for {symbol}: {e}")
 
@@ -240,13 +248,15 @@ async def get_share_data(symbol: str) -> dict[str, Any]:
         shares_history = []
         try:
             quarterly = stock.quarterly_balance_sheet
-            if not quarterly.empty and 'Ordinary Shares Number' in quarterly.index:
-                shares_series = quarterly.loc['Ordinary Shares Number']
+            if not quarterly.empty and "Ordinary Shares Number" in quarterly.index:
+                shares_series = quarterly.loc["Ordinary Shares Number"]
                 for date, shares in shares_series.items():
-                    shares_history.append({
-                        "date": str(date.date()) if hasattr(date, 'date') else str(date),
-                        "shares": float(shares) if pd.notna(shares) else None
-                    })
+                    shares_history.append(
+                        {
+                            "date": str(date.date()) if hasattr(date, "date") else str(date),
+                            "shares": float(shares) if pd.notna(shares) else None,
+                        }
+                    )
         except Exception as e:
             logger.debug(f"Could not fetch share count history for {symbol}: {e}")
 
@@ -255,14 +265,16 @@ async def get_share_data(symbol: str) -> dict[str, Any]:
         try:
             cash_flow = stock.cashflow
             if not cash_flow.empty:
-                if 'Repurchase Of Capital Stock' in cash_flow.index:
-                    buybacks = cash_flow.loc['Repurchase Of Capital Stock']
+                if "Repurchase Of Capital Stock" in cash_flow.index:
+                    buybacks = cash_flow.loc["Repurchase Of Capital Stock"]
                     for date, amount in buybacks.items():
                         if pd.notna(amount) and amount != 0:
-                            buyback_history.append({
-                                "date": str(date.date()) if hasattr(date, 'date') else str(date),
-                                "amount": float(amount)
-                            })
+                            buyback_history.append(
+                                {
+                                    "date": str(date.date()) if hasattr(date, "date") else str(date),
+                                    "amount": float(amount),
+                                }
+                            )
         except Exception as e:
             logger.debug(f"Could not fetch buyback history for {symbol}: {e}")
 
@@ -298,13 +310,15 @@ async def get_management_compensation(symbol: str) -> dict[str, Any]:
         try:
             officers = stock.info.get("companyOfficers", [])
             for officer in officers[:5]:  # Top 5 executives
-                executives.append({
-                    "name": officer.get("name"),
-                    "title": officer.get("title"),
-                    "total_pay": officer.get("totalPay"),
-                    "exercised_value": officer.get("exercisedValue"),
-                    "unexercised_value": officer.get("unexercisedValue"),
-                })
+                executives.append(
+                    {
+                        "name": officer.get("name"),
+                        "title": officer.get("title"),
+                        "total_pay": officer.get("totalPay"),
+                        "exercised_value": officer.get("exercisedValue"),
+                        "unexercised_value": officer.get("unexercisedValue"),
+                    }
+                )
         except Exception as e:
             logger.debug(f"Could not fetch executive data for {symbol}: {e}")
 
@@ -312,22 +326,17 @@ async def get_management_compensation(symbol: str) -> dict[str, Any]:
         stock_based_comp = []
         try:
             cash_flow = stock.cashflow
-            if not cash_flow.empty and 'Stock Based Compensation' in cash_flow.index:
-                sbc = cash_flow.loc['Stock Based Compensation']
+            if not cash_flow.empty and "Stock Based Compensation" in cash_flow.index:
+                sbc = cash_flow.loc["Stock Based Compensation"]
                 for date, amount in sbc.items():
                     if pd.notna(amount):
-                        stock_based_comp.append({
-                            "date": str(date.date()) if hasattr(date, 'date') else str(date),
-                            "amount": float(amount)
-                        })
+                        stock_based_comp.append(
+                            {"date": str(date.date()) if hasattr(date, "date") else str(date), "amount": float(amount)}
+                        )
         except Exception as e:
             logger.debug(f"Could not fetch stock-based comp for {symbol}: {e}")
 
-        return {
-            "symbol": symbol,
-            "key_executives": executives,
-            "stock_based_compensation_history": stock_based_comp,
-        }
+        return {"symbol": symbol, "key_executives": executives, "stock_based_compensation_history": stock_based_comp}
     except Exception as e:
         logger.error(f"Error fetching management compensation for {symbol}: {e}")
         return {"error": str(e), "symbol": symbol}
@@ -354,7 +363,7 @@ async def get_technical_indicators(symbol: str, period: str = "1y") -> dict[str,
 
         # Calculate technical indicators using pandas-ta
         try:
-            import pandas_ta as ta
+            import pandas_ta  # noqa: F401
 
             # Add technical indicators
             hist.ta.rsi(length=14, append=True)
@@ -366,9 +375,9 @@ async def get_technical_indicators(symbol: str, period: str = "1y") -> dict[str,
             latest = hist.iloc[-1]
 
             # Determine trend
-            sma_50 = latest.get(f'SMA_50', None)
-            sma_200 = latest.get(f'SMA_200', None)
-            current_price = latest['Close']
+            sma_50 = latest.get("SMA_50", None)
+            sma_200 = latest.get("SMA_200", None)
+            current_price = latest["Close"]
 
             trend = "neutral"
             if sma_50 and sma_200 and current_price:
@@ -382,41 +391,41 @@ async def get_technical_indicators(symbol: str, period: str = "1y") -> dict[str,
                     trend = "downtrend"
 
             # Calculate momentum
-            returns_1m = ((hist['Close'].iloc[-1] / hist['Close'].iloc[-20]) - 1) * 100 if len(hist) >= 20 else None
-            returns_3m = ((hist['Close'].iloc[-1] / hist['Close'].iloc[-60]) - 1) * 100 if len(hist) >= 60 else None
-            returns_1y = ((hist['Close'].iloc[-1] / hist['Close'].iloc[0]) - 1) * 100 if len(hist) >= 200 else None
+            returns_1m = ((hist["Close"].iloc[-1] / hist["Close"].iloc[-20]) - 1) * 100 if len(hist) >= 20 else None
+            returns_3m = ((hist["Close"].iloc[-1] / hist["Close"].iloc[-60]) - 1) * 100 if len(hist) >= 60 else None
+            returns_1y = ((hist["Close"].iloc[-1] / hist["Close"].iloc[0]) - 1) * 100 if len(hist) >= 200 else None
 
             return {
                 "symbol": symbol,
-                "current_price": float(latest['Close']),
-                "rsi": float(latest.get('RSI_14', 0)),
-                "macd": float(latest.get('MACD_12_26_9', 0)),
-                "macd_signal": float(latest.get('MACDs_12_26_9', 0)),
+                "current_price": float(latest["Close"]),
+                "rsi": float(latest.get("RSI_14", 0)),
+                "macd": float(latest.get("MACD_12_26_9", 0)),
+                "macd_signal": float(latest.get("MACDs_12_26_9", 0)),
                 "sma_50": float(sma_50) if sma_50 else None,
                 "sma_200": float(sma_200) if sma_200 else None,
-                "bb_upper": float(latest.get('BBU_5_2.0', 0)),
-                "bb_lower": float(latest.get('BBL_5_2.0', 0)),
+                "bb_upper": float(latest.get("BBU_5_2.0", 0)),
+                "bb_lower": float(latest.get("BBL_5_2.0", 0)),
                 "trend": trend,
                 "returns_1m_pct": float(returns_1m) if returns_1m else None,
                 "returns_3m_pct": float(returns_3m) if returns_3m else None,
                 "returns_1y_pct": float(returns_1y) if returns_1y else None,
-                "52_week_high": float(hist['High'].max()),
-                "52_week_low": float(hist['Low'].min()),
-                "avg_volume": float(hist['Volume'].mean()),
+                "52_week_high": float(hist["High"].max()),
+                "52_week_low": float(hist["Low"].min()),
+                "avg_volume": float(hist["Volume"].mean()),
             }
         except ImportError:
             # Fallback if pandas-ta not available
             logger.warning("pandas-ta not available, using basic technical analysis")
 
             latest = hist.iloc[-1]
-            current_price = latest['Close']
+            current_price = latest["Close"]
 
             # Simple moving averages
-            sma_50 = hist['Close'].rolling(50).mean().iloc[-1] if len(hist) >= 50 else None
-            sma_200 = hist['Close'].rolling(200).mean().iloc[-1] if len(hist) >= 200 else None
+            sma_50 = hist["Close"].rolling(50).mean().iloc[-1] if len(hist) >= 50 else None
+            sma_200 = hist["Close"].rolling(200).mean().iloc[-1] if len(hist) >= 200 else None
 
             # Basic RSI calculation
-            delta = hist['Close'].diff()
+            delta = hist["Close"].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
@@ -428,9 +437,9 @@ async def get_technical_indicators(symbol: str, period: str = "1y") -> dict[str,
                 "sma_50": float(sma_50) if sma_50 and not pd.isna(sma_50) else None,
                 "sma_200": float(sma_200) if sma_200 and not pd.isna(sma_200) else None,
                 "rsi": float(rsi.iloc[-1]) if not rsi.empty and not pd.isna(rsi.iloc[-1]) else None,
-                "52_week_high": float(hist['High'].max()),
-                "52_week_low": float(hist['Low'].min()),
-                "avg_volume": float(hist['Volume'].mean()),
+                "52_week_high": float(hist["High"].max()),
+                "52_week_low": float(hist["Low"].min()),
+                "avg_volume": float(hist["Volume"].mean()),
             }
 
     except Exception as e:
@@ -453,21 +462,13 @@ async def get_valuation_metrics(symbol: str) -> dict[str, Any]:
         stock = yf.Ticker(symbol)
         info = stock.info
 
-        # Get historical P/E ratios if available
-        hist_pe = []
-        try:
-            # Get quarterly earnings and price to calculate historical P/E
-            quarterly_financials = stock.quarterly_financials
-            hist_prices = stock.history(period="2y")
-            # This is simplified - full implementation would match dates properly
-        except Exception as e:
-            logger.debug(f"Could not calculate historical P/E for {symbol}: {e}")
+        # Historical P/E calculation would require matching quarterly earnings with prices
+        # Skipping for now as it requires complex date alignment
 
         return {
             "symbol": symbol,
             "current_price": info.get("currentPrice"),
             "market_cap": info.get("marketCap"),
-
             # Valuation multiples
             "trailing_pe": info.get("trailingPE"),
             "forward_pe": info.get("forwardPE"),
@@ -476,12 +477,10 @@ async def get_valuation_metrics(symbol: str) -> dict[str, Any]:
             "price_to_sales": info.get("priceToSalesTrailing12Months"),
             "enterprise_to_revenue": info.get("enterpriseToRevenue"),
             "enterprise_to_ebitda": info.get("enterpriseToEbitda"),
-
             # Dividend metrics
             "dividend_yield": info.get("dividendYield"),
             "dividend_rate": info.get("dividendRate"),
             "payout_ratio": info.get("payoutRatio"),
-
             # Additional context
             "trailing_eps": info.get("trailingEps"),
             "forward_eps": info.get("forwardEps"),
@@ -513,7 +512,7 @@ async def get_financial_history(symbol: str, years: int = 5) -> dict[str, Any]:
             financials = stock.financials
             if not financials.empty:
                 for date_col in financials.columns[:years]:
-                    year_data = {"date": str(date_col.date()) if hasattr(date_col, 'date') else str(date_col)}
+                    year_data = {"date": str(date_col.date()) if hasattr(date_col, "date") else str(date_col)}
                     for idx in financials.index:
                         value = financials.loc[idx, date_col]
                         if pd.notna(value):
@@ -522,10 +521,7 @@ async def get_financial_history(symbol: str, years: int = 5) -> dict[str, Any]:
         except Exception as e:
             logger.debug(f"Could not fetch financial history for {symbol}: {e}")
 
-        return {
-            "symbol": symbol,
-            "annual_financials": financials_history,
-        }
+        return {"symbol": symbol, "annual_financials": financials_history}
     except Exception as e:
         logger.error(f"Error fetching financial history for {symbol}: {e}")
         return {"error": str(e), "symbol": symbol}
@@ -606,10 +602,7 @@ async def find_similar_companies(symbol: str, limit: int = 10) -> dict[str, Any]
         ref_market_cap = ref_fund.get("market_cap")
 
         if ref_sector == "N/A" or not ref_market_cap:
-            return {
-                "error": "Reference stock missing sector or market cap data",
-                "symbol": symbol,
-            }
+            return {"error": "Reference stock missing sector or market cap data", "symbol": symbol}
 
         # Get candidate companies from sector/industry
         candidates = []
@@ -708,41 +701,31 @@ async def find_similar_companies(symbol: str, limit: int = 10) -> dict[str, Any]
                     return max(0, max_points * (1 - pct_diff))
 
                 # Margin similarity (15 points)
-                margin_sim = calc_metric_similarity(
-                    ref_fund.get("profit_margin"),
-                    cand_fund.get("profit_margin"),
-                    15
-                )
+                margin_sim = calc_metric_similarity(ref_fund.get("profit_margin"), cand_fund.get("profit_margin"), 15)
                 score += margin_sim
                 weights["margin_similarity"] = round(margin_sim, 2)
 
                 # Growth similarity (10 points)
-                growth_sim = calc_metric_similarity(
-                    ref_fund.get("revenue_growth"),
-                    cand_fund.get("revenue_growth"),
-                    10
-                )
+                growth_sim = calc_metric_similarity(ref_fund.get("revenue_growth"), cand_fund.get("revenue_growth"), 10)
                 score += growth_sim
                 weights["growth_similarity"] = round(growth_sim, 2)
 
                 # ROE similarity (5 points)
-                roe_sim = calc_metric_similarity(
-                    ref_fund.get("roe"),
-                    cand_fund.get("roe"),
-                    5
-                )
+                roe_sim = calc_metric_similarity(ref_fund.get("roe"), cand_fund.get("roe"), 5)
                 score += roe_sim
                 weights["roe_similarity"] = round(roe_sim, 2)
 
-                similar_companies.append({
-                    "symbol": candidate_symbol,
-                    "name": cand_fund.get("company_name", "N/A"),
-                    "similarity_score": round(score, 2),
-                    "market_cap": cand_market_cap,
-                    "sector": cand_fund.get("sector", "N/A"),
-                    "industry": cand_fund.get("industry", "N/A"),
-                    "weights": weights,
-                })
+                similar_companies.append(
+                    {
+                        "symbol": candidate_symbol,
+                        "name": cand_fund.get("company_name", "N/A"),
+                        "similarity_score": round(score, 2),
+                        "market_cap": cand_market_cap,
+                        "sector": cand_fund.get("sector", "N/A"),
+                        "industry": cand_fund.get("industry", "N/A"),
+                        "weights": weights,
+                    }
+                )
 
             except Exception as e:
                 logger.debug(f"Error processing candidate {candidate_symbol}: {e}")
@@ -780,11 +763,9 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "description": "Get fundamental financial metrics including ROIC, ROE, margins, balance sheet, cash flow. Use this to understand profitability, capital efficiency, and financial health.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "symbol": {"type": "string", "description": "Stock ticker symbol (e.g., AAPL, MSFT)"}
-                },
-                "required": ["symbol"]
-            }
+                "properties": {"symbol": {"type": "string", "description": "Stock ticker symbol (e.g., AAPL, MSFT)"}},
+                "required": ["symbol"],
+            },
         },
         {
             "type": "function",
@@ -792,11 +773,9 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "description": "Get insider ownership percentage and recent insider buying/selling transactions. Use this to understand skin in the game and insider confidence.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "symbol": {"type": "string", "description": "Stock ticker symbol"}
-                },
-                "required": ["symbol"]
-            }
+                "properties": {"symbol": {"type": "string", "description": "Stock ticker symbol"}},
+                "required": ["symbol"],
+            },
         },
         {
             "type": "function",
@@ -804,11 +783,9 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "description": "Get major institutional shareholders and recent changes in holdings. Use this to identify smart money and track their moves.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "symbol": {"type": "string", "description": "Stock ticker symbol"}
-                },
-                "required": ["symbol"]
-            }
+                "properties": {"symbol": {"type": "string", "description": "Stock ticker symbol"}},
+                "required": ["symbol"],
+            },
         },
         {
             "type": "function",
@@ -816,11 +793,9 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "description": "Get share count history and corporate buyback activity. Use this to understand dilution/accretion and capital allocation to shareholders.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "symbol": {"type": "string", "description": "Stock ticker symbol"}
-                },
-                "required": ["symbol"]
-            }
+                "properties": {"symbol": {"type": "string", "description": "Stock ticker symbol"}},
+                "required": ["symbol"],
+            },
         },
         {
             "type": "function",
@@ -828,11 +803,9 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "description": "Get executive compensation structure and stock-based comp. Use this to understand alignment and employee turnover incentives.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "symbol": {"type": "string", "description": "Stock ticker symbol"}
-                },
-                "required": ["symbol"]
-            }
+                "properties": {"symbol": {"type": "string", "description": "Stock ticker symbol"}},
+                "required": ["symbol"],
+            },
         },
         {
             "type": "function",
@@ -842,10 +815,14 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "type": "object",
                 "properties": {
                     "symbol": {"type": "string", "description": "Stock ticker symbol"},
-                    "period": {"type": "string", "description": "Historical period: 1mo, 3mo, 6mo, 1y, 2y, 5y", "default": "1y"}
+                    "period": {
+                        "type": "string",
+                        "description": "Historical period: 1mo, 3mo, 6mo, 1y, 2y, 5y",
+                        "default": "1y",
+                    },
                 },
-                "required": ["symbol"]
-            }
+                "required": ["symbol"],
+            },
         },
         {
             "type": "function",
@@ -853,11 +830,9 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "description": "Get valuation multiples including P/E, P/B, P/S, EV/EBITDA, PEG ratio. Use this to assess if stock is fairly valued.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "symbol": {"type": "string", "description": "Stock ticker symbol"}
-                },
-                "required": ["symbol"]
-            }
+                "properties": {"symbol": {"type": "string", "description": "Stock ticker symbol"}},
+                "required": ["symbol"],
+            },
         },
         {
             "type": "function",
@@ -867,10 +842,10 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "type": "object",
                 "properties": {
                     "symbol": {"type": "string", "description": "Stock ticker symbol"},
-                    "years": {"type": "integer", "description": "Number of years of history", "default": 5}
+                    "years": {"type": "integer", "description": "Number of years of history", "default": 5},
                 },
-                "required": ["symbol"]
-            }
+                "required": ["symbol"],
+            },
         },
         {
             "type": "function",
@@ -880,10 +855,10 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "type": "object",
                 "properties": {
                     "symbol1": {"type": "string", "description": "First stock ticker symbol"},
-                    "symbol2": {"type": "string", "description": "Second stock ticker symbol"}
+                    "symbol2": {"type": "string", "description": "Second stock ticker symbol"},
                 },
-                "required": ["symbol1", "symbol2"]
-            }
+                "required": ["symbol1", "symbol2"],
+            },
         },
         {
             "type": "function",
@@ -893,10 +868,14 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "type": "object",
                 "properties": {
                     "symbol": {"type": "string", "description": "Reference stock ticker symbol (e.g., AAPL, MSFT)"},
-                    "limit": {"type": "integer", "description": "Maximum number of similar companies to return (default 10)", "default": 10}
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of similar companies to return (default 10)",
+                        "default": 10,
+                    },
                 },
-                "required": ["symbol"]
-            }
+                "required": ["symbol"],
+            },
         },
     ]
 

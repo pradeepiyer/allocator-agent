@@ -53,7 +53,12 @@ class AllocatorAgent(BaseAgent):
         # Execute analysis with tools
         response = await self.execute_tool_conversation(
             instructions=prompts["instructions"],
-            initial_input=[{"role": "user", "content": f"Analyze {symbol} as a potential investment. Provide a comprehensive analysis covering all investment principles including management quality, capital allocation, financial metrics, competitive position, valuation, and technical setup. End with a clear investment recommendation."}],
+            initial_input=[
+                {
+                    "role": "user",
+                    "content": f"Analyze {symbol} as a potential investment. Provide a comprehensive analysis covering all investment principles including management quality, capital allocation, financial metrics, competitive position, valuation, and technical setup. End with a clear investment recommendation.",
+                }
+            ],
             tools=get_tool_definitions(),
             tool_executor=execute_tool,
             max_iterations=max_iterations,
@@ -87,7 +92,12 @@ class AllocatorAgent(BaseAgent):
         # Execute similarity search
         response = await self.execute_tool_conversation(
             instructions=prompts["instructions"],
-            initial_input=[{"role": "user", "content": f"Find stocks that are similar to {symbol}. IMPORTANT: First use the 'find_similar_companies' tool to programmatically discover candidate companies in the same sector/industry with similar characteristics. Then analyze the top candidates across multiple dimensions including business model, financial profile, management quality, and competitive position. Rank the results by similarity and explain what makes each one similar or different."}],
+            initial_input=[
+                {
+                    "role": "user",
+                    "content": f"Find stocks that are similar to {symbol}. IMPORTANT: First use the 'find_similar_companies' tool to programmatically discover candidate companies in the same sector/industry with similar characteristics. Then analyze the top candidates across multiple dimensions including business model, financial profile, management quality, and competitive position. Rank the results by similarity and explain what makes each one similar or different.",
+                }
+            ],
             tools=get_tool_definitions(),
             tool_executor=execute_tool,
             max_iterations=max_iterations,
@@ -123,7 +133,7 @@ class AllocatorAgent(BaseAgent):
             symbol=symbol,
             analysis=analysis,
             similar_stocks=similar_result.similar_stocks,
-            sources=list(set(analysis.sources + similar_result.sources))  # Deduplicate sources
+            sources=list(set(analysis.sources + similar_result.sources)),  # Deduplicate sources
         )
 
         logger.info(f"Generated allocator report for {symbol} with {len(report.similar_stocks)} similar stocks")

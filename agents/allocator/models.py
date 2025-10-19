@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class StockAnalysis(BaseModel):
@@ -58,5 +58,3 @@ class AllocatorReport(BaseModel):
     analysis: StockAnalysis
     similar_stocks: list[SimilarStock]
     sources: list[str]
-
-
