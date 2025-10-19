@@ -78,3 +78,6 @@ reports/
 
 # Debug files
 /tmp/allocator-agent-prompts/
+
+# Market database (too large for git, rebuild with scripts)
+agents/allocator/data/market.db

@@ -18,6 +18,15 @@ dependencies = [
 [project.scripts]
 allocator-agent = "agents.allocator.main:main"
 
+[project.optional-dependencies]
+data = [
+    "lxml>=5.0.0",
+    "html5lib>=1.1",
+    "tqdm>=4.66.0",
+    "beautifulsoup4>=4.12.0",
+    "requests>=2.31.0",
+]
+
 [tool.uv]
 package = true
 
