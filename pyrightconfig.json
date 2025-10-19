@@ -7,5 +7,6 @@
   "pythonVersion": "3.13",
   "venvPath": ".",
   "venv": ".venv",
-  "typeCheckingMode": "strict"
+  "typeCheckingMode": "strict",
+  "reportMissingTypeStubs": false
 }
