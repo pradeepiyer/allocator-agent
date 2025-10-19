@@ -95,8 +95,9 @@ make console
 
 ## Configuration
 - `allocator/config.yaml`: Agent-specific settings (max_iterations: 25)
-- `~/.agent-kit/config.yaml`: Global OpenAI settings
+- `~/.allocator-agent/config.yaml`: User preferences directory (agent-specific)
 - `OPENAI_API_KEY` environment variable required
+- User directory auto-configured via `set_app_name("allocator-agent")` in main.py
 
 ## Key Principles
 - **Investment rigor**: Always support conclusions with data

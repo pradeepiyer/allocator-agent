@@ -5,6 +5,7 @@ import logging
 import sys
 
 from agent_kit.api.console.server import run_console
+from agent_kit.utils import set_app_name
 from agents.allocator.console import AllocatorCommands
 
 
@@ -27,6 +28,9 @@ def setup_logging():
 
 def main():
     """Main entry point."""
+    # Set custom user directory before any imports that use get_user_dir()
+    set_app_name("allocator-agent")
+
     setup_logging()
 
     # Run console with Allocator commands

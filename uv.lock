@@ -5,7 +5,7 @@ requires-python = ">=3.13"
 [[package]]
 name = "agent-kit"
 version = "0.1.0"
-source = { git = "https://github.com/pradeepiyer/agent-kit.git#c9f99c1f50bf433a8f52c9a93e69dd162b6f54c8" }
+source = { git = "https://github.com/pradeepiyer/agent-kit.git#8f743a3a25a4d0d4d8d4d217d11d9c56c0ccdc4a" }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiohttp" },
