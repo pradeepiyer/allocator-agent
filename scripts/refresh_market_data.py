@@ -15,13 +15,13 @@ Faster than full download since it only updates recent/current data.
 
 Usage:
     # Refresh all stocks
-    uv run --extra data python scripts/refresh_market_data.py
+    uv run python scripts/refresh_market_data.py
 
     # Refresh specific symbols
-    uv run --extra data python scripts/refresh_market_data.py --symbols AAPL MSFT GOOGL
+    uv run python scripts/refresh_market_data.py --symbols AAPL MSFT GOOGL
 
     # Refresh S&P 500 only
-    uv run --extra data python scripts/refresh_market_data.py --index sp500
+    uv run python scripts/refresh_market_data.py --index sp500
 
 Estimated time: 45-90 minutes for all stocks
 """
