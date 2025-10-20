@@ -53,7 +53,20 @@ class MarketDataDownloader:
                 industry TEXT,
                 market_cap REAL,
                 description TEXT,
-                last_updated TIMESTAMP
+                last_updated TIMESTAMP,
+                beta REAL,
+                enterprise_value REAL,
+                quick_ratio REAL,
+                total_cash REAL,
+                total_debt REAL,
+                shares_short REAL,
+                implied_shares_outstanding REAL,
+                dividend_yield REAL,
+                dividend_rate REAL,
+                payout_ratio REAL,
+                forward_pe REAL,
+                forward_eps REAL,
+                peg_ratio REAL
             )
         """)
 
@@ -74,6 +87,8 @@ class MarketDataDownloader:
                 shares_outstanding REAL,
                 roic REAL,
                 roe REAL,
+                roa REAL,
+                ebitda REAL,
                 profit_margin REAL,
                 operating_margin REAL,
                 gross_margin REAL,
@@ -152,6 +167,111 @@ class MarketDataDownloader:
             )
         """)
 
+        # 7. Institutional holders
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS institutional_holders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                holder_name TEXT,
+                shares REAL,
+                date_reported DATE,
+                pct_out REAL,
+                value REAL,
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_inst_holders_symbol ON institutional_holders(symbol)")
+
+        # 8. Major holders
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS major_holders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                insiders_percent REAL,
+                institutions_percent REAL,
+                institutions_float_percent REAL,
+                institutions_count INTEGER,
+                as_of_date DATE,
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol),
+                UNIQUE(symbol, as_of_date)
+            )
+        """)
+
+        # 9. Executives
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS executives (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                name TEXT,
+                title TEXT,
+                total_pay REAL,
+                exercised_value REAL,
+                unexercised_value REAL,
+                year_born INTEGER,
+                fiscal_year INTEGER,
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_executives_symbol ON executives(symbol)")
+
+        # 10. Stock-based compensation
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS stock_based_compensation (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                fiscal_year INTEGER,
+                sbc_amount REAL,
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol),
+                UNIQUE(symbol, fiscal_year)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sbc_symbol ON stock_based_compensation(symbol)")
+
+        # 11. Quarterly shares
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS quarterly_shares (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                fiscal_year INTEGER,
+                fiscal_quarter INTEGER,
+                shares_outstanding REAL,
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol),
+                UNIQUE(symbol, fiscal_year, fiscal_quarter)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_qtr_shares_symbol ON quarterly_shares(symbol)")
+
+        # 12. Quarterly fundamentals
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fundamentals_quarterly (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                fiscal_year INTEGER,
+                fiscal_quarter INTEGER,
+                revenue REAL,
+                operating_income REAL,
+                net_income REAL,
+                total_assets REAL,
+                total_liabilities REAL,
+                shareholders_equity REAL,
+                operating_cash_flow REAL,
+                free_cash_flow REAL,
+                gross_profit REAL,
+                ebitda REAL,
+                profit_margin REAL,
+                operating_margin REAL,
+                gross_margin REAL,
+                debt_to_equity REAL,
+                current_ratio REAL,
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol),
+                UNIQUE(symbol, fiscal_year, fiscal_quarter)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_qtr_fund_symbol ON fundamentals_quarterly(symbol)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_qtr_fund_period ON fundamentals_quarterly(fiscal_year, fiscal_quarter)"
+        )
+
         conn.commit()
         conn.close()
 
@@ -196,7 +316,7 @@ class MarketDataDownloader:
             stock = yf.Ticker(symbol)
             info = stock.info
 
-            # 1. Company info
+            # 1. Company info (includes all stock metadata)
             company_data = {
                 "symbol": symbol,
                 "name": info.get("longName"),
@@ -205,6 +325,19 @@ class MarketDataDownloader:
                 "market_cap": info.get("marketCap"),
                 "description": info.get("longBusinessSummary"),
                 "last_updated": datetime.now(),
+                "beta": info.get("beta"),
+                "enterprise_value": info.get("enterpriseValue"),
+                "quick_ratio": info.get("quickRatio"),
+                "total_cash": info.get("totalCash"),
+                "total_debt": info.get("totalDebt"),
+                "shares_short": info.get("sharesShort"),
+                "implied_shares_outstanding": info.get("impliedSharesOutstanding"),
+                "dividend_yield": info.get("dividendYield"),
+                "dividend_rate": info.get("dividendRate"),
+                "payout_ratio": info.get("payoutRatio"),
+                "forward_pe": info.get("forwardPE"),
+                "forward_eps": info.get("forwardEps"),
+                "peg_ratio": info.get("pegRatio"),
             }
 
             # 2. Annual financials (10 years)
@@ -271,6 +404,14 @@ class MarketDataDownloader:
                         if current_assets and current_liabilities and current_liabilities > 0:
                             current_ratio = float(current_assets / current_liabilities)
 
+                        roa = None
+                        if net_income and total_assets and total_assets > 0:
+                            roa = float(net_income / total_assets)
+
+                        # EBITDA = operating_income + depreciation (if available)
+                        # For now, set to None as depreciation not easily extracted
+                        ebitda = None
+
                         annual_data.append(
                             {
                                 "symbol": symbol,
@@ -286,6 +427,8 @@ class MarketDataDownloader:
                                 "shares_outstanding": shares_outstanding,
                                 "roic": roic,
                                 "roe": roe,
+                                "roa": roa,
+                                "ebitda": ebitda,
                                 "profit_margin": profit_margin,
                                 "operating_margin": operating_margin,
                                 "gross_margin": gross_margin,
@@ -385,6 +528,205 @@ class MarketDataDownloader:
             except Exception as e:
                 logger.debug(f"{symbol}: Could not fetch buyback data - {e}")
 
+            # 7. Institutional holders
+            institutional_holders = []
+            try:
+                inst_holders = stock.institutional_holders
+                if not inst_holders.empty:
+                    for _, holder in inst_holders.iterrows():
+                        date_reported = holder.get("Date Reported")
+                        institutional_holders.append(
+                            {
+                                "symbol": symbol,
+                                "holder_name": holder.get("Holder"),
+                                "shares": holder.get("Shares"),
+                                "date_reported": date_reported.date()
+                                if hasattr(date_reported, "date")
+                                else date_reported,
+                                "pct_out": holder.get("% Out"),
+                                "value": holder.get("Value"),
+                            }
+                        )
+            except Exception as e:
+                logger.debug(f"{symbol}: Could not fetch institutional holders - {e}")
+
+            # 8. Major holders
+            major_holders_data = {
+                "symbol": symbol,
+                "as_of_date": datetime.now().date(),
+                "insiders_percent": None,
+                "institutions_percent": None,
+                "institutions_float_percent": None,
+                "institutions_count": None,
+            }
+            try:
+                major_holders = stock.major_holders
+                if not major_holders.empty:
+                    # major_holders DataFrame has format: [Value, Description]
+                    # Rows vary but typically: insiders %, institutions %, institutions float %, institutions count
+                    for idx, row in major_holders.iterrows():
+                        desc = str(row.iloc[1]).lower() if len(row) > 1 else ""
+                        value_str = str(row.iloc[0])
+
+                        # Parse percentage values
+                        if "insider" in desc:
+                            try:
+                                major_holders_data["insiders_percent"] = (
+                                    float(value_str.replace("%", "")) / 100 if "%" in value_str else float(value_str)
+                                )
+                            except:
+                                pass
+                        elif "institution" in desc and "float" in desc:
+                            try:
+                                major_holders_data["institutions_float_percent"] = (
+                                    float(value_str.replace("%", "")) / 100 if "%" in value_str else float(value_str)
+                                )
+                            except:
+                                pass
+                        elif "institution" in desc:
+                            try:
+                                # Could be percentage or count
+                                if "%" in value_str:
+                                    major_holders_data["institutions_percent"] = float(value_str.replace("%", "")) / 100
+                                else:
+                                    # Might be count
+                                    major_holders_data["institutions_count"] = int(float(value_str))
+                            except:
+                                pass
+            except Exception as e:
+                logger.debug(f"{symbol}: Could not fetch major holders - {e}")
+
+            # 9. Executives
+            executives = []
+            try:
+                officers = info.get("companyOfficers", [])
+                if officers:
+                    current_year = datetime.now().year
+                    for officer in officers[:10]:  # Top 10 executives
+                        executives.append(
+                            {
+                                "symbol": symbol,
+                                "name": officer.get("name"),
+                                "title": officer.get("title"),
+                                "total_pay": officer.get("totalPay"),
+                                "exercised_value": officer.get("exercisedValue"),
+                                "unexercised_value": officer.get("unexercisedValue"),
+                                "year_born": officer.get("yearBorn"),
+                                "fiscal_year": current_year,  # Current year for this snapshot
+                            }
+                        )
+            except Exception as e:
+                logger.debug(f"{symbol}: Could not fetch executives - {e}")
+
+            # 10. Stock-based compensation (annual)
+            sbc_data = []
+            try:
+                cash_flow = stock.cashflow  # Annual
+                if not cash_flow.empty and "Stock Based Compensation" in cash_flow.index:
+                    sbc = cash_flow.loc["Stock Based Compensation"]
+                    for date_col, amount in sbc.items():
+                        if pd.notna(amount):
+                            sbc_data.append(
+                                {"symbol": symbol, "fiscal_year": date_col.year, "sbc_amount": float(amount)}
+                            )
+            except Exception as e:
+                logger.debug(f"{symbol}: Could not fetch stock-based compensation - {e}")
+
+            # 11. Quarterly shares
+            quarterly_shares = []
+            try:
+                qtr_bs = stock.quarterly_balance_sheet
+                if not qtr_bs.empty and "Ordinary Shares Number" in qtr_bs.index:
+                    shares_series = qtr_bs.loc["Ordinary Shares Number"]
+                    for date_col, shares in shares_series.items():
+                        if pd.notna(shares):
+                            quarterly_shares.append(
+                                {
+                                    "symbol": symbol,
+                                    "fiscal_year": date_col.year,
+                                    "fiscal_quarter": (date_col.month - 1) // 3 + 1,
+                                    "shares_outstanding": float(shares),
+                                }
+                            )
+            except Exception as e:
+                logger.debug(f"{symbol}: Could not fetch quarterly shares - {e}")
+
+            # 12. Quarterly fundamentals
+            quarterly_data = []
+            try:
+                qtr_financials = stock.quarterly_financials
+                qtr_balance_sheet = stock.quarterly_balance_sheet
+                qtr_cash_flow = stock.quarterly_cashflow
+
+                if not qtr_financials.empty:
+                    # Process up to 40 quarters (10 years)
+                    for date_col in qtr_financials.columns[:40]:
+                        year = date_col.year
+                        quarter = (date_col.month - 1) // 3 + 1
+
+                        # Extract metrics (same as annual, but from quarterly statements)
+                        revenue = self._get_value(qtr_financials, "Total Revenue", date_col)
+                        operating_income = self._get_value(qtr_financials, "Operating Income", date_col)
+                        net_income = self._get_value(qtr_financials, "Net Income", date_col)
+                        gross_profit = self._get_value(qtr_financials, "Gross Profit", date_col)
+
+                        total_assets = self._get_value(qtr_balance_sheet, "Total Assets", date_col)
+                        total_liabilities = self._get_value(
+                            qtr_balance_sheet, "Total Liabilities Net Minority Interest", date_col
+                        )
+                        shareholders_equity = self._get_value(qtr_balance_sheet, "Stockholders Equity", date_col)
+                        current_assets = self._get_value(qtr_balance_sheet, "Current Assets", date_col)
+                        current_liabilities = self._get_value(qtr_balance_sheet, "Current Liabilities", date_col)
+
+                        operating_cf = self._get_value(qtr_cash_flow, "Operating Cash Flow", date_col)
+                        free_cf = self._get_value(qtr_cash_flow, "Free Cash Flow", date_col)
+
+                        # Calculate margins and ratios
+                        profit_margin = None
+                        if net_income and revenue and revenue > 0:
+                            profit_margin = float(net_income / revenue)
+
+                        operating_margin = None
+                        if operating_income and revenue and revenue > 0:
+                            operating_margin = float(operating_income / revenue)
+
+                        gross_margin = None
+                        if gross_profit and revenue and revenue > 0:
+                            gross_margin = float(gross_profit / revenue)
+
+                        debt_to_equity = None
+                        if total_liabilities and shareholders_equity and shareholders_equity > 0:
+                            debt_to_equity = float(total_liabilities / shareholders_equity)
+
+                        current_ratio = None
+                        if current_assets and current_liabilities and current_liabilities > 0:
+                            current_ratio = float(current_assets / current_liabilities)
+
+                        quarterly_data.append(
+                            {
+                                "symbol": symbol,
+                                "fiscal_year": year,
+                                "fiscal_quarter": quarter,
+                                "revenue": revenue,
+                                "operating_income": operating_income,
+                                "net_income": net_income,
+                                "total_assets": total_assets,
+                                "total_liabilities": total_liabilities,
+                                "shareholders_equity": shareholders_equity,
+                                "operating_cash_flow": operating_cf,
+                                "free_cash_flow": free_cf,
+                                "gross_profit": gross_profit,
+                                "ebitda": None,  # Not easily calculated from quarterly
+                                "profit_margin": profit_margin,
+                                "operating_margin": operating_margin,
+                                "gross_margin": gross_margin,
+                                "debt_to_equity": debt_to_equity,
+                                "current_ratio": current_ratio,
+                            }
+                        )
+            except Exception as e:
+                logger.debug(f"{symbol}: Could not fetch quarterly fundamentals - {e}")
+
             return {
                 "success": True,
                 "symbol": symbol,
@@ -394,6 +736,12 @@ class MarketDataDownloader:
                 "insider_transactions": insider_data,
                 "ownership": ownership_data,
                 "buybacks": buyback_data,
+                "institutional_holders": institutional_holders,
+                "major_holders": major_holders_data,
+                "executives": executives,
+                "stock_based_compensation": sbc_data,
+                "quarterly_shares": quarterly_shares,
+                "quarterly_fundamentals": quarterly_data,
             }
 
         except Exception as e:
@@ -419,11 +767,15 @@ class MarketDataDownloader:
         cursor = conn.cursor()
 
         try:
-            # 1. Save company data
+            # 1. Save company data (including all metadata fields)
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO stocks (symbol, name, sector, industry, market_cap, description, last_updated)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO stocks
+                (symbol, name, sector, industry, market_cap, description, last_updated,
+                 beta, enterprise_value, quick_ratio, total_cash, total_debt, shares_short,
+                 implied_shares_outstanding, dividend_yield, dividend_rate, payout_ratio,
+                 forward_pe, forward_eps, peg_ratio)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     stock_data["company"]["symbol"],
@@ -433,6 +785,19 @@ class MarketDataDownloader:
                     stock_data["company"]["market_cap"],
                     stock_data["company"]["description"],
                     stock_data["company"]["last_updated"],
+                    stock_data["company"]["beta"],
+                    stock_data["company"]["enterprise_value"],
+                    stock_data["company"]["quick_ratio"],
+                    stock_data["company"]["total_cash"],
+                    stock_data["company"]["total_debt"],
+                    stock_data["company"]["shares_short"],
+                    stock_data["company"]["implied_shares_outstanding"],
+                    stock_data["company"]["dividend_yield"],
+                    stock_data["company"]["dividend_rate"],
+                    stock_data["company"]["payout_ratio"],
+                    stock_data["company"]["forward_pe"],
+                    stock_data["company"]["forward_eps"],
+                    stock_data["company"]["peg_ratio"],
                 ),
             )
 
@@ -444,9 +809,9 @@ class MarketDataDownloader:
                     (symbol, fiscal_year, revenue, operating_income, net_income,
                      total_assets, total_liabilities, shareholders_equity,
                      operating_cash_flow, free_cash_flow, shares_outstanding,
-                     roic, roe, profit_margin, operating_margin, gross_margin,
+                     roic, roe, roa, ebitda, profit_margin, operating_margin, gross_margin,
                      debt_to_equity, current_ratio)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         record["symbol"],
@@ -462,6 +827,8 @@ class MarketDataDownloader:
                         record["shares_outstanding"],
                         record["roic"],
                         record["roe"],
+                        record["roa"],
+                        record["ebitda"],
                         record["profit_margin"],
                         record["operating_margin"],
                         record["gross_margin"],
@@ -544,6 +911,124 @@ class MarketDataDownloader:
                         record["fiscal_quarter"],
                         record["shares_repurchased"],
                         record["buyback_amount"],
+                    ),
+                )
+
+            # 7. Save institutional holders
+            for record in stock_data["institutional_holders"]:
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO institutional_holders
+                    (symbol, holder_name, shares, date_reported, pct_out, value)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        record["symbol"],
+                        record["holder_name"],
+                        record["shares"],
+                        record["date_reported"],
+                        record["pct_out"],
+                        record["value"],
+                    ),
+                )
+
+            # 8. Save major holders
+            major_holders = stock_data["major_holders"]
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO major_holders
+                (symbol, insiders_percent, institutions_percent, institutions_float_percent,
+                 institutions_count, as_of_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    major_holders["symbol"],
+                    major_holders["insiders_percent"],
+                    major_holders["institutions_percent"],
+                    major_holders["institutions_float_percent"],
+                    major_holders["institutions_count"],
+                    major_holders["as_of_date"],
+                ),
+            )
+
+            # 9. Save executives
+            for record in stock_data["executives"]:
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO executives
+                    (symbol, name, title, total_pay, exercised_value, unexercised_value,
+                     year_born, fiscal_year)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        record["symbol"],
+                        record["name"],
+                        record["title"],
+                        record["total_pay"],
+                        record["exercised_value"],
+                        record["unexercised_value"],
+                        record["year_born"],
+                        record["fiscal_year"],
+                    ),
+                )
+
+            # 10. Save stock-based compensation
+            for record in stock_data["stock_based_compensation"]:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO stock_based_compensation
+                    (symbol, fiscal_year, sbc_amount)
+                    VALUES (?, ?, ?)
+                """,
+                    (record["symbol"], record["fiscal_year"], record["sbc_amount"]),
+                )
+
+            # 11. Save quarterly shares
+            for record in stock_data["quarterly_shares"]:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO quarterly_shares
+                    (symbol, fiscal_year, fiscal_quarter, shares_outstanding)
+                    VALUES (?, ?, ?, ?)
+                """,
+                    (
+                        record["symbol"],
+                        record["fiscal_year"],
+                        record["fiscal_quarter"],
+                        record["shares_outstanding"],
+                    ),
+                )
+
+            # 12. Save quarterly fundamentals
+            for record in stock_data["quarterly_fundamentals"]:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO fundamentals_quarterly
+                    (symbol, fiscal_year, fiscal_quarter, revenue, operating_income, net_income,
+                     total_assets, total_liabilities, shareholders_equity, operating_cash_flow,
+                     free_cash_flow, gross_profit, ebitda, profit_margin, operating_margin,
+                     gross_margin, debt_to_equity, current_ratio)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        record["symbol"],
+                        record["fiscal_year"],
+                        record["fiscal_quarter"],
+                        record["revenue"],
+                        record["operating_income"],
+                        record["net_income"],
+                        record["total_assets"],
+                        record["total_liabilities"],
+                        record["shareholders_equity"],
+                        record["operating_cash_flow"],
+                        record["free_cash_flow"],
+                        record["gross_profit"],
+                        record["ebitda"],
+                        record["profit_margin"],
+                        record["operating_margin"],
+                        record["gross_margin"],
+                        record["debt_to_equity"],
+                        record["current_ratio"],
                     ),
                 )
 
@@ -634,7 +1119,7 @@ async def main():
 
     if not sp500_file.exists() or not russell2000_file.exists():
         logger.error("Symbol files not found. Run download_symbols.py first.")
-        logger.error(f"Expected files:")
+        logger.error("Expected files:")
         logger.error(f"  - {sp500_file}")
         logger.error(f"  - {russell2000_file}")
         return
@@ -648,7 +1133,7 @@ async def main():
     # Combine and deduplicate
     all_symbols = sorted(list(set(sp500_symbols + russell2000_symbols)))
 
-    logger.info(f"Symbol lists loaded:")
+    logger.info("Symbol lists loaded:")
     logger.info(f"  S&P 500: {len(sp500_symbols)} symbols")
     logger.info(f"  Russell 2000: {len(russell2000_symbols)} symbols")
     logger.info(f"  Total unique: {len(all_symbols)} symbols")
