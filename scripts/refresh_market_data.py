@@ -206,14 +206,14 @@ class MarketDataRefresher:
                                 major_holders_data["insiders_percent"] = (
                                     float(value_str.replace("%", "")) / 100 if "%" in value_str else float(value_str)
                                 )
-                            except:
+                            except (ValueError, TypeError):
                                 pass
                         elif "institution" in desc and "float" in desc:
                             try:
                                 major_holders_data["institutions_float_percent"] = (
                                     float(value_str.replace("%", "")) / 100 if "%" in value_str else float(value_str)
                                 )
-                            except:
+                            except (ValueError, TypeError):
                                 pass
                         elif "institution" in desc:
                             try:
@@ -221,7 +221,7 @@ class MarketDataRefresher:
                                     major_holders_data["institutions_percent"] = float(value_str.replace("%", "")) / 100
                                 else:
                                     major_holders_data["institutions_count"] = int(float(value_str))
-                            except:
+                            except (ValueError, TypeError):
                                 pass
             except Exception as e:
                 logger.debug(f"{symbol}: Could not fetch major holders - {e}")
@@ -363,7 +363,7 @@ class MarketDataRefresher:
             if row_name in df.index and col_name in df.columns:
                 val = df.loc[row_name, col_name]
                 return float(val) if pd.notna(val) else None
-        except:
+        except Exception:
             pass
         return None
 
@@ -539,12 +539,7 @@ class MarketDataRefresher:
                     (symbol, fiscal_year, fiscal_quarter, shares_outstanding)
                     VALUES (?, ?, ?, ?)
                 """,
-                    (
-                        record["symbol"],
-                        record["fiscal_year"],
-                        record["fiscal_quarter"],
-                        record["shares_outstanding"],
-                    ),
+                    (record["symbol"], record["fiscal_year"], record["fiscal_quarter"], record["shares_outstanding"]),
                 )
 
             # 9. Refresh quarterly fundamentals (last 2 quarters)
@@ -624,8 +619,7 @@ class MarketDataRefresher:
                             self.save_to_database(result)
                             self.success_count += 1
                             pbar.set_postfix(
-                                {"success": self.success_count, "failed": len(self.failed_symbols)},
-                                refresh=False,
+                                {"success": self.success_count, "failed": len(self.failed_symbols)}, refresh=False
                             )
                         except Exception as e:
                             logger.error(f"Failed to save {result['symbol']}: {e}")

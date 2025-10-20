@@ -24,8 +24,7 @@ def get_sp500_symbols() -> list[str]:
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
     # Add User-Agent header to avoid 403 Forbidden
     tables = pd.read_html(
-        url,
-        storage_options={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+        url, storage_options={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
     )
     sp500_table = tables[0]
 
@@ -51,11 +50,11 @@ def get_russell2000_symbols() -> list[str]:
         url = "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund"
 
         # Read CSV, skipping the first 9 rows (header is on row 10)
-        df = pd.read_csv(url, skiprows=9, encoding='utf-8-sig')  # utf-8-sig to handle BOM
+        df = pd.read_csv(url, skiprows=9, encoding="utf-8-sig")  # utf-8-sig to handle BOM
 
         # Find the Ticker column
-        if 'Ticker' in df.columns:
-            symbols = df['Ticker'].dropna().tolist()
+        if "Ticker" in df.columns:
+            symbols = df["Ticker"].dropna().tolist()
 
             # Clean up symbols
             symbols = [str(s).strip().upper() for s in symbols if pd.notna(s) and str(s).strip()]
@@ -67,7 +66,11 @@ def get_russell2000_symbols() -> list[str]:
             symbols = [
                 s.replace(".", "-")
                 for s in symbols
-                if s and s != '-' and len(s) <= 6 and not s.startswith('X') and s.replace('-', '').replace('.', '').isalpha()
+                if s
+                and s != "-"
+                and len(s) <= 6
+                and not s.startswith("X")
+                and s.replace("-", "").replace(".", "").isalpha()
             ]
 
             logger.info(f"Found {len(symbols)} Russell 2000 symbols from iShares IWM")

@@ -300,7 +300,7 @@ class MarketDataDownloader:
                 return None
 
             return float(nopat / invested_capital)
-        except:
+        except Exception:
             return None
 
     async def download_stock(self, symbol: str) -> dict:
@@ -368,16 +368,12 @@ class MarketDataDownloader:
 
                         operating_cf = self._get_value(cash_flow, "Operating Cash Flow", date_col)
                         free_cf = self._get_value(cash_flow, "Free Cash Flow", date_col)
-                        shares_repurchased = self._get_value(cash_flow, "Repurchase Of Capital Stock", date_col)
 
                         shares_outstanding = self._get_value(balance_sheet, "Ordinary Shares Number", date_col)
 
                         # Calculate derived metrics
                         roic = self.calculate_roic(
-                            operating_income,
-                            total_assets,
-                            current_liabilities,
-                            info.get("effectiveTaxRate", 0.21),
+                            operating_income, total_assets, current_liabilities, info.get("effectiveTaxRate", 0.21)
                         )
 
                         roe = None
@@ -574,14 +570,14 @@ class MarketDataDownloader:
                                 major_holders_data["insiders_percent"] = (
                                     float(value_str.replace("%", "")) / 100 if "%" in value_str else float(value_str)
                                 )
-                            except:
+                            except (ValueError, TypeError):
                                 pass
                         elif "institution" in desc and "float" in desc:
                             try:
                                 major_holders_data["institutions_float_percent"] = (
                                     float(value_str.replace("%", "")) / 100 if "%" in value_str else float(value_str)
                                 )
-                            except:
+                            except (ValueError, TypeError):
                                 pass
                         elif "institution" in desc:
                             try:
@@ -591,7 +587,7 @@ class MarketDataDownloader:
                                 else:
                                     # Might be count
                                     major_holders_data["institutions_count"] = int(float(value_str))
-                            except:
+                            except (ValueError, TypeError):
                                 pass
             except Exception as e:
                 logger.debug(f"{symbol}: Could not fetch major holders - {e}")
@@ -753,7 +749,7 @@ class MarketDataDownloader:
             if row_name in df.index and col_name in df.columns:
                 val = df.loc[row_name, col_name]
                 return float(val) if pd.notna(val) else None
-        except:
+        except Exception:
             pass
         return None
 
@@ -991,12 +987,7 @@ class MarketDataDownloader:
                     (symbol, fiscal_year, fiscal_quarter, shares_outstanding)
                     VALUES (?, ?, ?, ?)
                 """,
-                    (
-                        record["symbol"],
-                        record["fiscal_year"],
-                        record["fiscal_quarter"],
-                        record["shares_outstanding"],
-                    ),
+                    (record["symbol"], record["fiscal_year"], record["fiscal_quarter"], record["shares_outstanding"]),
                 )
 
             # 12. Save quarterly fundamentals
@@ -1078,8 +1069,7 @@ class MarketDataDownloader:
                             self.save_to_database(result)
                             self.success_count += 1
                             pbar.set_postfix(
-                                {"success": self.success_count, "failed": len(self.failed_symbols)},
-                                refresh=False,
+                                {"success": self.success_count, "failed": len(self.failed_symbols)}, refresh=False
                             )
                         except Exception as e:
                             logger.error(f"Failed to save {result['symbol']}: {e}")
