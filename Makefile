@@ -70,16 +70,16 @@ wc:
 	@echo ""
 	@echo "Python files by component:"
 	@echo "  allocator/ components (dynamically detected):"
-	@for dir in $$(find ./allocator -type d -mindepth 1 | sort); do \
+	@for dir in $$(find ./agents/allocator -type d -mindepth 1 | sort); do \
 		if [ -n "$$(find $$dir -maxdepth 1 -name "*.py" -type f)" ]; then \
-			component=$$(echo $$dir | sed 's|^\./allocator/||'); \
+			component=$$(echo $$dir | sed 's|^\./agents/allocator/||'); \
 			count=$$(find $$dir -maxdepth 1 -name "*.py" -type f | xargs wc -l 2>/dev/null | tail -1 | awk '{print $$1}'); \
 			[ "$$count" != "0" ] && echo "    $$component/: $$count lines"; \
 		fi \
 	done
 	@echo ""
 	@echo "  allocator/ total:"
-	@find ./allocator -name "*.py" -type f | xargs wc -l | tail -1 | awk '{print "   " $$1 " lines"}'
+	@find ./agents/allocator -name "*.py" -type f | xargs wc -l | tail -1 | awk '{print "   " $$1 " lines"}'
 	@echo ""
 	@echo "  tests/ (test framework):"
 	@if [ -d "./tests" ]; then \
