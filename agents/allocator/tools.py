@@ -339,7 +339,9 @@ async def get_insider_ownership(symbol: str) -> dict[str, Any]:
 
                     insider_txns_for_db.append(
                         {
-                            "transaction_date": transaction_date.date() if hasattr(transaction_date, "date") else transaction_date,
+                            "transaction_date": transaction_date.date()
+                            if hasattr(transaction_date, "date")
+                            else transaction_date,
                             "insider_name": txn.get("Insider Trading"),
                             "insider_title": None,
                             "transaction_type": txn.get("Transaction"),
@@ -666,7 +668,11 @@ async def get_management_compensation(symbol: str) -> dict[str, Any]:
             for sbc in sbc_db:
                 stock_based_comp.append({"date": str(sbc.get("fiscal_year")), "amount": sbc.get("sbc_amount")})
 
-            return {"symbol": symbol, "key_executives": executives, "stock_based_compensation_history": stock_based_comp}
+            return {
+                "symbol": symbol,
+                "key_executives": executives,
+                "stock_based_compensation_history": stock_based_comp,
+            }
 
         # Cache miss - fetch from yfinance
         logger.debug(f"Cache miss for {symbol} - fetching from yfinance")
@@ -770,7 +776,9 @@ async def get_technical_indicators(symbol: str, period: str = "1y") -> dict[str,
 
                 if not latest_hist.empty:
                     # Merge latest data with DB data (avoid duplicates by date)
-                    hist = pd.concat([hist, latest_hist]).loc[~pd.concat([hist, latest_hist]).index.duplicated(keep="last")]
+                    hist = pd.concat([hist, latest_hist]).loc[
+                        ~pd.concat([hist, latest_hist]).index.duplicated(keep="last")
+                    ]
                     hist = hist.sort_index()
 
                     # Write new prices to DB
@@ -1302,6 +1310,7 @@ async def screen_database_initial(
     min_market_cap: float | None = None,
     max_market_cap: float | None = None,
     sectors: list[ValidSector] | None = None,
+    min_revenue_growth: float | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
     """Initial screening with minimal data for fast candidate identification.
@@ -1309,14 +1318,18 @@ async def screen_database_initial(
     Queries database with filters but returns only essential fields to minimize
     token usage. Use this for Stage 1 screening to identify promising candidates.
 
+    NOTE: ROIC, ROE, and profit margin filters use 5-year historical averages to
+    ensure consistent long-term performance, not just a single good year.
+
     Args:
-        min_roic: Minimum ROIC (as decimal, e.g., 0.15 for 15%)
-        min_roe: Minimum ROE (as decimal, e.g., 0.15 for 15%)
-        min_profit_margin: Minimum profit margin (as decimal, e.g., 0.10 for 10%)
-        max_debt_to_equity: Maximum debt-to-equity ratio
+        min_roic: Minimum average ROIC over last 5 years (as decimal, e.g., 0.15 for 15%)
+        min_roe: Minimum average ROE over last 5 years (as decimal, e.g., 0.15 for 15%)
+        min_profit_margin: Minimum average profit margin over last 5 years (as decimal, e.g., 0.10 for 10%)
+        max_debt_to_equity: Maximum debt-to-equity ratio (latest year)
         min_market_cap: Minimum market cap in dollars
         max_market_cap: Maximum market cap in dollars
         sectors: List of sectors to include (e.g., ["Technology", "Healthcare"])
+        min_revenue_growth: Minimum revenue CAGR over last 5 years (as decimal, e.g., 0.10 for 10% growth)
         limit: Maximum number of results to return
 
     Returns:
@@ -1324,32 +1337,53 @@ async def screen_database_initial(
     """
     try:
         with db.get_db_connection() as conn:
-            # Initial screening query with essential fields for Stage 1 evaluation
+            # Screening query with 5-year historical averages for quality filters
+            # This ensures we only surface companies with proven long-term track records
             query = """
-                SELECT DISTINCT
-                    s.symbol,
-                    s.name,
-                    s.sector,
-                    s.market_cap,
-                    f.roic,
-                    f.roe,
-                    f.profit_margin,
-                    f.debt_to_equity,
-                    f.free_cash_flow,
-                    f.operating_cash_flow,
-                    o.insider_ownership_pct,
-                    o.institutional_ownership_pct
-                FROM stocks s
-                LEFT JOIN (
-                    SELECT symbol, roic, roe, profit_margin, debt_to_equity,
-                           free_cash_flow, operating_cash_flow
+                WITH historical_metrics AS (
+                    SELECT
+                        symbol,
+                        AVG(roic) as avg_roic_5yr,
+                        AVG(roe) as avg_roe_5yr,
+                        AVG(profit_margin) as avg_profit_margin_5yr,
+                        -- Revenue CAGR: (latest / oldest)^(1/(years-1)) - 1
+                        CASE
+                            WHEN MIN(revenue) > 0 AND MAX(revenue) > 0 AND COUNT(*) > 1
+                            THEN POWER(MAX(revenue) * 1.0 / MIN(revenue), 1.0 / (COUNT(*) - 1)) - 1
+                            ELSE NULL
+                        END as revenue_cagr_5yr,
+                        COUNT(*) as years_of_data
+                    FROM fundamentals_annual
+                    WHERE fiscal_year >= 2020
+                    GROUP BY symbol
+                    HAVING COUNT(*) >= 3  -- Require at least 3 years of historical data
+                ),
+                latest_metrics AS (
+                    SELECT symbol, debt_to_equity, free_cash_flow, operating_cash_flow
                     FROM fundamentals_annual f1
                     WHERE fiscal_year = (
                         SELECT MAX(fiscal_year)
                         FROM fundamentals_annual f2
                         WHERE f2.symbol = f1.symbol
                     )
-                ) f ON s.symbol = f.symbol
+                )
+                SELECT DISTINCT
+                    s.symbol,
+                    s.name,
+                    s.sector,
+                    s.market_cap,
+                    h.avg_roic_5yr,
+                    h.avg_roe_5yr,
+                    h.avg_profit_margin_5yr,
+                    h.revenue_cagr_5yr,
+                    l.debt_to_equity,
+                    l.free_cash_flow,
+                    l.operating_cash_flow,
+                    o.insider_ownership_pct,
+                    o.institutional_ownership_pct
+                FROM stocks s
+                INNER JOIN historical_metrics h ON s.symbol = h.symbol
+                LEFT JOIN latest_metrics l ON s.symbol = l.symbol
                 LEFT JOIN (
                     SELECT symbol, insider_ownership_pct, institutional_ownership_pct
                     FROM ownership o1
@@ -1364,21 +1398,21 @@ async def screen_database_initial(
 
             params = []
 
-            # Add filters
+            # Add filters - use 5-year averages for quality metrics
             if min_roic is not None:
-                query += " AND f.roic >= ?"
+                query += " AND h.avg_roic_5yr >= ?"
                 params.append(min_roic)
 
             if min_roe is not None:
-                query += " AND f.roe >= ?"
+                query += " AND h.avg_roe_5yr >= ?"
                 params.append(min_roe)
 
             if min_profit_margin is not None:
-                query += " AND f.profit_margin >= ?"
+                query += " AND h.avg_profit_margin_5yr >= ?"
                 params.append(min_profit_margin)
 
             if max_debt_to_equity is not None:
-                query += " AND (f.debt_to_equity <= ? OR f.debt_to_equity IS NULL)"
+                query += " AND (l.debt_to_equity <= ? OR l.debt_to_equity IS NULL)"
                 params.append(max_debt_to_equity)
 
             if min_market_cap is not None:
@@ -1394,15 +1428,19 @@ async def screen_database_initial(
                 query += f" AND s.sector IN ({placeholders})"
                 params.extend(sectors)
 
-            # Order by ROIC descending
-            query += " ORDER BY f.roic DESC, f.roe DESC LIMIT ?"
+            if min_revenue_growth is not None:
+                query += " AND h.revenue_cagr_5yr >= ?"
+                params.append(min_revenue_growth)
+
+            # Order by historical averages (proven track record)
+            query += " ORDER BY h.avg_roic_5yr DESC, h.avg_roe_5yr DESC LIMIT ?"
             params.append(limit)
 
             cursor = conn.cursor()
             cursor.execute(query, params)
             rows = cursor.fetchall()
 
-            # Convert to dictionaries with Stage 1 fields
+            # Convert to dictionaries with Stage 1 fields (historical averages)
             stocks = []
             for row in rows:
                 stocks.append(
@@ -1411,18 +1449,19 @@ async def screen_database_initial(
                         "name": row["name"],
                         "sector": row["sector"],
                         "market_cap": row["market_cap"],
-                        "roic": row["roic"],
-                        "roe": row["roe"],
-                        "profit_margin": row["profit_margin"],
-                        "debt_to_equity": row["debt_to_equity"],
-                        "free_cash_flow": row["free_cash_flow"],
-                        "operating_cash_flow": row["operating_cash_flow"],
+                        "roic": row["avg_roic_5yr"],  # 5-year average
+                        "roe": row["avg_roe_5yr"],  # 5-year average
+                        "profit_margin": row["avg_profit_margin_5yr"],  # 5-year average
+                        "revenue_cagr": row["revenue_cagr_5yr"],  # 5-year growth
+                        "debt_to_equity": row["debt_to_equity"],  # Latest year
+                        "free_cash_flow": row["free_cash_flow"],  # Latest year
+                        "operating_cash_flow": row["operating_cash_flow"],  # Latest year
                         "insider_ownership_pct": row["insider_ownership_pct"],
                         "institutional_ownership_pct": row["institutional_ownership_pct"],
                     }
                 )
 
-            logger.info(f"Initial screening returned {len(stocks)} candidates")
+            logger.info(f"Initial screening returned {len(stocks)} candidates with 5-year track records")
 
             return {
                 "stocks": stocks,
@@ -1431,9 +1470,11 @@ async def screen_database_initial(
                     "min_roic": min_roic,
                     "min_roe": min_roe,
                     "min_profit_margin": min_profit_margin,
+                    "max_debt_to_equity": max_debt_to_equity,
                     "min_market_cap": min_market_cap,
                     "max_market_cap": max_market_cap,
                     "sectors": sectors,
+                    "min_revenue_growth": min_revenue_growth,
                 },
             }
 
@@ -1835,21 +1876,21 @@ def get_tool_definitions() -> list[dict[str, Any]]:
         {
             "type": "function",
             "name": "screen_database_initial",
-            "description": "STAGE 1: Initial screening for fast candidate identification. Returns up to 100 stocks with key fields: symbol, name, sector, market_cap, roic, roe, profit_margin, debt_to_equity, free_cash_flow, operating_cash_flow, insider_ownership_pct, institutional_ownership_pct. Use this first to get a broad pool and identify 25-30 finalists.",
+            "description": "STAGE 1: Initial screening with 5-year historical track records. Returns stocks with proven long-term performance (not just one good year). Fields: symbol, name, sector, market_cap, roic (5yr avg), roe (5yr avg), profit_margin (5yr avg), revenue_cagr (5yr), debt_to_equity, free_cash_flow, operating_cash_flow, insider_ownership_pct, institutional_ownership_pct. Requires minimum 3 years of historical data. Use this first to get a quality pool of 25-50 finalists.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "min_roic": {
                         "type": "number",
-                        "description": "Minimum ROIC as decimal (e.g., 0.15 for 15%).",
+                        "description": "Minimum average ROIC over last 5 years as decimal (e.g., 0.15 for 15% avg). Filters for consistent capital efficiency.",
                     },
                     "min_roe": {
                         "type": "number",
-                        "description": "Minimum ROE as decimal (e.g., 0.15 for 15%).",
+                        "description": "Minimum average ROE over last 5 years as decimal (e.g., 0.15 for 15% avg). Filters for consistent profitability.",
                     },
                     "min_profit_margin": {
                         "type": "number",
-                        "description": "Minimum profit margin as decimal (e.g., 0.10 for 10%).",
+                        "description": "Minimum average profit margin over last 5 years as decimal (e.g., 0.10 for 10% avg). Filters for consistent pricing power.",
                     },
                     "max_debt_to_equity": {
                         "type": "number",
@@ -1883,6 +1924,10 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                         },
                         "description": "List of sectors to filter by. Valid sectors: Technology, Healthcare, Financial Services, Energy, Consumer Cyclical, Consumer Defensive, Industrials, Basic Materials, Utilities, Real Estate, Communication Services.",
                     },
+                    "min_revenue_growth": {
+                        "type": "number",
+                        "description": "Minimum revenue CAGR (compound annual growth rate) over last 5 years as decimal (e.g., 0.10 for 10% growth, 0.15 for 15% growth). Filters for growing companies.",
+                    },
                     "limit": {
                         "type": "integer",
                         "description": "Maximum number of results (default 50, can go up to 100 for broader pool)",
@@ -1903,7 +1948,7 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "List of stock ticker symbols to get detailed metrics for (e.g., ['NVDA', 'AAPL', 'MSFT'])",
-                    },
+                    }
                 },
                 "required": ["symbols"],
             },

@@ -126,15 +126,15 @@ class AllocatorCommands(SlashCommands):
             # Format metrics nicely
             metrics = stock.key_metrics
             if metrics.roic is not None:
-                lines.append(f"- ROIC: {metrics.roic*100:.1f}%")
+                lines.append(f"- ROIC: {metrics.roic * 100:.1f}%")
             if metrics.roe is not None:
-                lines.append(f"- ROE: {metrics.roe*100:.1f}%")
+                lines.append(f"- ROE: {metrics.roe * 100:.1f}%")
             if metrics.profit_margin is not None:
-                lines.append(f"- Profit Margin: {metrics.profit_margin*100:.1f}%")
+                lines.append(f"- Profit Margin: {metrics.profit_margin * 100:.1f}%")
             if metrics.debt_to_equity is not None:
                 lines.append(f"- Debt/Equity: {metrics.debt_to_equity:.2f}")
             if metrics.insider_ownership_pct is not None:
-                lines.append(f"- Insider Ownership: {metrics.insider_ownership_pct*100:.1f}%")
+                lines.append(f"- Insider Ownership: {metrics.insider_ownership_pct * 100:.1f}%")
             if metrics.forward_pe is not None:
                 lines.append(f"- Forward P/E: {metrics.forward_pe:.1f}")
             if metrics.market_cap is not None:

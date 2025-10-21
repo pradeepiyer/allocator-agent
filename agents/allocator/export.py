@@ -592,12 +592,7 @@ def export_screening_result_pdf(result: ScreeningResult, filename: str) -> None:
 
     for i, stock in enumerate(result.screened_stocks, 1):
         # Stock header
-        story.append(
-            Paragraph(
-                f"{i}. {stock.symbol} - {stock.name}",
-                subheading_style,
-            )
-        )
+        story.append(Paragraph(f"{i}. {stock.symbol} - {stock.name}", subheading_style))
         story.append(Paragraph(f"Sector: {stock.sector} | Quality Score: {stock.quality_score}/100", body_style))
         story.append(Spacer(1, 0.1 * inch))
 
@@ -612,15 +607,15 @@ def export_screening_result_pdf(result: ScreeningResult, filename: str) -> None:
         metrics_data = [["Metric", "Value"]]
 
         if metrics.roic is not None:
-            metrics_data.append(["ROIC", f"{metrics.roic*100:.1f}%"])
+            metrics_data.append(["ROIC", f"{metrics.roic * 100:.1f}%"])
         if metrics.roe is not None:
-            metrics_data.append(["ROE", f"{metrics.roe*100:.1f}%"])
+            metrics_data.append(["ROE", f"{metrics.roe * 100:.1f}%"])
         if metrics.profit_margin is not None:
-            metrics_data.append(["Profit Margin", f"{metrics.profit_margin*100:.1f}%"])
+            metrics_data.append(["Profit Margin", f"{metrics.profit_margin * 100:.1f}%"])
         if metrics.debt_to_equity is not None:
             metrics_data.append(["Debt/Equity", f"{metrics.debt_to_equity:.2f}"])
         if metrics.insider_ownership_pct is not None:
-            metrics_data.append(["Insider Ownership", f"{metrics.insider_ownership_pct*100:.1f}%"])
+            metrics_data.append(["Insider Ownership", f"{metrics.insider_ownership_pct * 100:.1f}%"])
         if metrics.forward_pe is not None:
             metrics_data.append(["Forward P/E", f"{metrics.forward_pe:.1f}"])
         if metrics.market_cap is not None:

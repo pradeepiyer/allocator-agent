@@ -838,12 +838,7 @@ def write_quarterly_shares(symbol: str, shares_data: list[dict[str, Any]]) -> No
                     (symbol, fiscal_year, fiscal_quarter, shares_outstanding)
                     VALUES (?, ?, ?, ?)
                 """,
-                    (
-                        symbol,
-                        shares.get("fiscal_year"),
-                        shares.get("fiscal_quarter"),
-                        shares.get("shares_outstanding"),
-                    ),
+                    (symbol, shares.get("fiscal_year"), shares.get("fiscal_quarter"), shares.get("shares_outstanding")),
                 )
             conn.commit()
             logger.debug(f"Wrote {len(shares_data)} quarterly share records for {symbol} to database")
