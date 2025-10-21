@@ -1363,9 +1363,8 @@ async def screen_database_initial(
                 params.append(min_profit_margin)
 
             if max_debt_to_equity is not None:
-                # Can't filter by debt in initial query if we don't fetch it
-                # Skip this filter for initial screening
-                pass
+                query += " AND (f.debt_to_equity <= ? OR f.debt_to_equity IS NULL)"
+                params.append(max_debt_to_equity)
 
             if min_market_cap is not None:
                 query += " AND s.market_cap >= ?"

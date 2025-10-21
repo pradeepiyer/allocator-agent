@@ -7,6 +7,68 @@ prompt:
 
     # Screening Approach: Two-Stage Process
 
+    ## Custom Criteria Parsing
+
+    **If user provides custom criteria**, parse it and adjust screening filters accordingly:
+
+    ### Sector Mapping
+    - "tech stocks", "technology" → sectors: ["Technology"]
+    - "healthcare", "biotech", "pharma" → sectors: ["Healthcare"]
+    - "financial", "banks" → sectors: ["Financial Services"]
+    - "energy" → sectors: ["Energy"]
+    - "consumer", "retail" → sectors: ["Consumer Cyclical", "Consumer Defensive"]
+    - "industrial" → sectors: ["Industrials"]
+    - "materials" → sectors: ["Basic Materials"]
+    - "utilities" → sectors: ["Utilities"]
+    - "real estate" → sectors: ["Real Estate"]
+    - "communication services" → sectors: ["Communication Services"]
+
+    ### Market Cap Mapping
+    - "under $10B", "below $10B" → max_market_cap: 10000000000
+    - "under $5B" → max_market_cap: 5000000000
+    - "under $2B", "small cap" → max_market_cap: 2000000000
+    - "micro cap" → max_market_cap: 300000000
+    - "mid cap" → min_market_cap: 2000000000, max_market_cap: 10000000000
+    - "large cap" → min_market_cap: 10000000000
+    - "mega cap", "over $200B" → min_market_cap: 200000000000
+
+    ### Additional Filters
+    - "high margins", "high profit margins" → min_profit_margin: 0.20 (20% instead of default 10%)
+    - "very high margins" → min_profit_margin: 0.30
+    - "low debt", "no debt" → max_debt_to_equity: 0.5 (stricter than default 1.0)
+    - "debt free" → Filter in Stage 1 for debt_to_equity < 0.1 or null
+    - "high ROIC" → min_roic: 0.25 (25% instead of default 15%)
+    - "exceptional ROIC" → min_roic: 0.40
+    - "high ROE" → min_roe: 0.25
+    - "high growth" → Look for revenue growth in Stage 2 detailed analysis
+    - "value stocks" → Look for low P/E, low P/B in Stage 2
+
+    ### Examples
+    ```
+    User: "tech stocks with high margins"
+    Filters: sectors=["Technology"], min_profit_margin=0.20
+
+    User: "healthcare under $10B market cap"
+    Filters: sectors=["Healthcare"], max_market_cap=10000000000
+
+    User: "small cap growth stocks with low debt"
+    Filters: max_market_cap=2000000000, max_debt_to_equity=0.5
+    (Focus on revenue growth in Stage 2)
+
+    User: "debt free technology companies"
+    Filters: sectors=["Technology"], filter for debt_to_equity < 0.1
+
+    User: "large cap value stocks"
+    Filters: min_market_cap=10000000000
+    (Focus on low P/E in Stage 2)
+    ```
+
+    **If no custom criteria provided**, use default filters:
+    - min_roic: 0.15 (15%)
+    - min_roe: 0.15 (15%)
+    - min_profit_margin: 0.10 (10%)
+    - min_market_cap: 500000000 ($500M)
+
     ## STAGE 1: Initial Screening (Broad Pool, Key Metrics)
 
     Start by calling `screen_database_initial` with filters to get a broad pool of candidates (50-100 stocks).
