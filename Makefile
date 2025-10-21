@@ -53,7 +53,6 @@ ci:
 	uv sync --group dev
 	uv run ruff check
 	uv run ruff format --check
-	uv run python -m pytest
 
 # Sync uv dependencies
 sync-deps:

@@ -46,7 +46,7 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
         symbol: Stock ticker symbol
 
     Returns:
-        Dictionary with fundamental metrics
+        Dictionary with fundamental metrics including 5-year growth rates
     """
     try:
         # Try database first
@@ -69,6 +69,32 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
                 week_52_low = info.get("fiftyTwoWeekLow")
             except Exception as e:
                 logger.debug(f"Could not fetch current price for {symbol}: {e}")
+
+            # Calculate 5-year growth rates from historical data
+            revenue_growth = None
+            earnings_growth = None
+            history = db.get_fundamentals_annual_history(symbol, 5)
+            if history and len(history) >= 3:
+                # Revenue CAGR (5-year)
+                revenues = [h.get("revenue") for h in history if h.get("revenue")]
+                if len(revenues) >= 3:
+                    max_revenue = max(revenues)
+                    min_revenue = min(revenues)
+                    years = len(revenues)
+                    if min_revenue and min_revenue > 0 and max_revenue > min_revenue:
+                        revenue_growth = (max_revenue / min_revenue) ** (1.0 / (years - 1)) - 1
+
+                # Earnings CAGR (5-year)
+                earnings = [h.get("net_income") for h in history if h.get("net_income")]
+                if len(earnings) >= 3:
+                    # Filter out negative earnings for CAGR calculation
+                    positive_earnings = [e for e in earnings if e > 0]
+                    if len(positive_earnings) >= 3:
+                        max_earnings = max(positive_earnings)
+                        min_earnings = min(positive_earnings)
+                        years = len(positive_earnings)
+                        if min_earnings > 0 and max_earnings > min_earnings:
+                            earnings_growth = (max_earnings / min_earnings) ** (1.0 / (years - 1)) - 1
 
             return {
                 "symbol": symbol,
@@ -93,9 +119,9 @@ async def get_stock_fundamentals(symbol: str) -> dict[str, Any]:
                 # Cash Flow
                 "free_cash_flow": fundamentals.get("free_cash_flow"),
                 "operating_cash_flow": fundamentals.get("operating_cash_flow"),
-                # Growth (not in DB - would need multi-year comparison)
-                "revenue_growth": None,
-                "earnings_growth": None,
+                # Growth (5-year CAGR from DB historical data)
+                "revenue_growth": revenue_growth,
+                "earnings_growth": earnings_growth,
                 # Additional metrics
                 "beta": stock_info.get("beta"),
                 "52_week_high": week_52_high,
@@ -892,7 +918,7 @@ async def get_technical_indicators(symbol: str, period: str = "1y") -> dict[str,
 
 
 async def get_valuation_metrics(symbol: str) -> dict[str, Any]:
-    """Get valuation metrics and historical comparison.
+    """Get valuation metrics with historical context and anomaly detection.
 
     Covers: Reasonable valuation, premium/discount justification.
     Uses database cache with yfinance fallback.
@@ -901,7 +927,7 @@ async def get_valuation_metrics(symbol: str) -> dict[str, Any]:
         symbol: Stock ticker symbol
 
     Returns:
-        Dictionary with valuation metrics
+        Dictionary with valuation metrics including 5-year context
     """
     try:
         # Try database first
@@ -935,25 +961,69 @@ async def get_valuation_metrics(symbol: str) -> dict[str, Any]:
             except Exception as e:
                 logger.debug(f"Could not fetch current valuation metrics for {symbol}: {e}")
 
+            # Calculate historical valuation context from database
+            historical_pe_avg = None
+            pe_vs_historical = None
+            forward_pe_anomaly = None
+
+            with db.get_db_connection() as conn:
+                # Get 5-year average P/E from price history and fundamentals
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT AVG(ph.close / (f.net_income / f.shares_outstanding)) as avg_pe
+                    FROM price_history ph
+                    JOIN fundamentals_annual f ON ph.symbol = f.symbol
+                        AND strftime('%Y', ph.date) = CAST(f.fiscal_year AS TEXT)
+                    WHERE ph.symbol = ?
+                        AND f.net_income > 0
+                        AND f.shares_outstanding > 0
+                        AND ph.date >= date('now', '-5 years')
+                    """,
+                    (symbol,),
+                )
+                result = cursor.fetchone()
+                if result and result[0]:
+                    historical_pe_avg = float(result[0])
+
+                    # Calculate deviation from historical average
+                    if trailing_pe and historical_pe_avg:
+                        pe_vs_historical = (trailing_pe / historical_pe_avg - 1) * 100
+
+            # Detect forward P/E anomalies (like TPL's suspicious 12.7)
+            forward_pe = stock_info.get("forward_pe")
+            forward_eps = stock_info.get("forward_eps")
+            if forward_pe and trailing_pe and trailing_eps and forward_eps:
+                # If forward P/E is < 50% of trailing P/E, flag as suspicious
+                # This means forward EPS would need to more than double
+                if forward_pe < (trailing_pe * 0.5):
+                    implied_eps_growth = (forward_eps / trailing_eps - 1) * 100
+                    forward_pe_anomaly = f"Forward P/E of {forward_pe:.1f} implies {implied_eps_growth:.0f}% earnings growth. Verify analyst estimates are current."
+
             return {
                 "symbol": symbol,
                 "current_price": current_price,
                 "market_cap": stock_info.get("market_cap"),
-                # Valuation multiples (mix of DB and live)
+                # Current valuation multiples
                 "trailing_pe": trailing_pe,
-                "forward_pe": stock_info.get("forward_pe"),
+                "forward_pe": forward_pe,
                 "peg_ratio": stock_info.get("peg_ratio"),
                 "price_to_book": price_to_book,
                 "price_to_sales": price_to_sales,
                 "enterprise_to_revenue": enterprise_to_revenue,
                 "enterprise_to_ebitda": enterprise_to_ebitda,
+                # Historical context (5-year)
+                "historical_pe_5yr_avg": historical_pe_avg,
+                "pe_vs_historical_pct": pe_vs_historical,
+                # Anomaly detection
+                "forward_pe_anomaly": forward_pe_anomaly,
                 # Dividend metrics (from DB)
                 "dividend_yield": stock_info.get("dividend_yield"),
                 "dividend_rate": stock_info.get("dividend_rate"),
                 "payout_ratio": stock_info.get("payout_ratio"),
                 # Additional context (mix of DB and live)
                 "trailing_eps": trailing_eps,
-                "forward_eps": stock_info.get("forward_eps"),
+                "forward_eps": forward_eps,
                 "book_value": book_value,
             }
 
@@ -1489,40 +1559,49 @@ async def get_detailed_metrics(symbols: list[str]) -> dict[str, Any]:
     Fetches comprehensive financial data for finalist stocks identified in
     Stage 1 screening. Use this for Stage 2 detailed analysis.
 
+    Includes 5-year historical averages and growth rates for trend analysis.
+
     Args:
         symbols: List of stock ticker symbols to get details for
 
     Returns:
-        Dictionary with detailed stock information for each symbol
+        Dictionary with detailed stock information including 5-year metrics
     """
     try:
         if not symbols:
             return {"stocks": [], "total_found": 0}
 
         with db.get_db_connection() as conn:
-            # Detailed query with all fields
+            # Detailed query with 5-year historical averages and latest year data
             placeholders = ",".join("?" * len(symbols))
             query = f"""
-                SELECT DISTINCT
-                    s.symbol,
-                    s.name,
-                    s.sector,
-                    s.industry,
-                    s.market_cap,
-                    f.roic,
-                    f.roe,
-                    f.profit_margin,
-                    f.debt_to_equity,
-                    f.current_ratio,
-                    f.free_cash_flow,
-                    f.operating_cash_flow,
-                    o.insider_ownership_pct,
-                    o.institutional_ownership_pct,
-                    s.forward_pe,
-                    s.peg_ratio,
-                    s.beta
-                FROM stocks s
-                LEFT JOIN (
+                WITH historical AS (
+                    SELECT
+                        symbol,
+                        AVG(roic) as avg_roic_5yr,
+                        AVG(roe) as avg_roe_5yr,
+                        AVG(profit_margin) as avg_profit_margin_5yr,
+                        AVG(operating_margin) as avg_operating_margin_5yr,
+                        CASE
+                            WHEN COUNT(revenue) >= 3 AND MIN(revenue) > 0
+                            THEN POWER(MAX(revenue) * 1.0 / MIN(revenue), 1.0 / (COUNT(*) - 1)) - 1
+                            ELSE NULL
+                        END as revenue_cagr_5yr,
+                        CASE
+                            WHEN COUNT(CASE WHEN net_income > 0 THEN net_income END) >= 3
+                            THEN POWER(
+                                MAX(CASE WHEN net_income > 0 THEN net_income END) * 1.0 /
+                                MIN(CASE WHEN net_income > 0 THEN net_income END),
+                                1.0 / (COUNT(CASE WHEN net_income > 0 THEN net_income END) - 1)
+                            ) - 1
+                            ELSE NULL
+                        END as earnings_cagr_5yr
+                    FROM fundamentals_annual
+                    WHERE fiscal_year >= 2020
+                    GROUP BY symbol
+                    HAVING COUNT(*) >= 3
+                ),
+                latest AS (
                     SELECT symbol, roic, roe, profit_margin, debt_to_equity,
                            current_ratio, free_cash_flow, operating_cash_flow
                     FROM fundamentals_annual f1
@@ -1531,7 +1610,34 @@ async def get_detailed_metrics(symbols: list[str]) -> dict[str, Any]:
                         FROM fundamentals_annual f2
                         WHERE f2.symbol = f1.symbol
                     )
-                ) f ON s.symbol = f.symbol
+                )
+                SELECT DISTINCT
+                    s.symbol,
+                    s.name,
+                    s.sector,
+                    s.industry,
+                    s.market_cap,
+                    l.roic as roic_latest,
+                    l.roe as roe_latest,
+                    l.profit_margin as profit_margin_latest,
+                    l.debt_to_equity,
+                    l.current_ratio,
+                    l.free_cash_flow,
+                    l.operating_cash_flow,
+                    h.avg_roic_5yr,
+                    h.avg_roe_5yr,
+                    h.avg_profit_margin_5yr,
+                    h.avg_operating_margin_5yr,
+                    h.revenue_cagr_5yr,
+                    h.earnings_cagr_5yr,
+                    o.insider_ownership_pct,
+                    o.institutional_ownership_pct,
+                    s.forward_pe,
+                    s.peg_ratio,
+                    s.beta
+                FROM stocks s
+                LEFT JOIN latest l ON s.symbol = l.symbol
+                LEFT JOIN historical h ON s.symbol = h.symbol
                 LEFT JOIN (
                     SELECT symbol, insider_ownership_pct, institutional_ownership_pct
                     FROM ownership o1
@@ -1558,22 +1664,34 @@ async def get_detailed_metrics(symbols: list[str]) -> dict[str, Any]:
                         "sector": row["sector"],
                         "industry": row["industry"],
                         "market_cap": row["market_cap"],
-                        "roic": row["roic"],
-                        "roe": row["roe"],
-                        "profit_margin": row["profit_margin"],
+                        # Latest year metrics
+                        "roic": row["roic_latest"],
+                        "roe": row["roe_latest"],
+                        "profit_margin": row["profit_margin_latest"],
                         "debt_to_equity": row["debt_to_equity"],
                         "current_ratio": row["current_ratio"],
                         "free_cash_flow": row["free_cash_flow"],
                         "operating_cash_flow": row["operating_cash_flow"],
+                        # 5-year historical averages
+                        "roic_5yr_avg": row["avg_roic_5yr"],
+                        "roe_5yr_avg": row["avg_roe_5yr"],
+                        "profit_margin_5yr_avg": row["avg_profit_margin_5yr"],
+                        "operating_margin_5yr_avg": row["avg_operating_margin_5yr"],
+                        # 5-year growth rates (CAGR)
+                        "revenue_cagr_5yr": row["revenue_cagr_5yr"],
+                        "earnings_cagr_5yr": row["earnings_cagr_5yr"],
+                        # Ownership
                         "insider_ownership_pct": row["insider_ownership_pct"],
                         "institutional_ownership_pct": row["institutional_ownership_pct"],
+                        # Valuation
                         "forward_pe": row["forward_pe"],
                         "peg_ratio": row["peg_ratio"],
+                        # Risk
                         "beta": row["beta"],
                     }
                 )
 
-            logger.info(f"Fetched detailed metrics for {len(stocks)} stocks")
+            logger.info(f"Fetched detailed metrics with 5-year history for {len(stocks)} stocks")
 
             return {"stocks": stocks, "total_found": len(stocks)}
 
