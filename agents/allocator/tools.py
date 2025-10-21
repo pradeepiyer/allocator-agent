@@ -1,7 +1,7 @@
 """Financial data tools for Allocator Agent using yfinance."""
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,21 @@ import yfinance as yf
 from . import db
 
 logger = logging.getLogger(__name__)
+
+# Valid sector names from the database
+ValidSector = Literal[
+    "Technology",
+    "Healthcare",
+    "Financial Services",
+    "Energy",
+    "Consumer Cyclical",
+    "Consumer Defensive",
+    "Industrials",
+    "Basic Materials",
+    "Utilities",
+    "Real Estate",
+    "Communication Services",
+]
 
 
 def _safe_date_str(value: Any) -> str | None:
@@ -1286,7 +1301,7 @@ async def screen_database_initial(
     max_debt_to_equity: float | None = None,
     min_market_cap: float | None = None,
     max_market_cap: float | None = None,
-    sectors: list[str] | None = None,
+    sectors: list[ValidSector] | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
     """Initial screening with minimal data for fast candidate identification.
@@ -1836,6 +1851,10 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                         "type": "number",
                         "description": "Minimum profit margin as decimal (e.g., 0.10 for 10%).",
                     },
+                    "max_debt_to_equity": {
+                        "type": "number",
+                        "description": "Maximum debt-to-equity ratio (e.g., 0.5 for low debt, 1.0 for moderate debt).",
+                    },
                     "min_market_cap": {
                         "type": "number",
                         "description": "Minimum market cap in dollars (e.g., 500000000 for $500M).",
@@ -1846,8 +1865,23 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                     },
                     "sectors": {
                         "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of sectors to include. Omit to search all sectors.",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "Technology",
+                                "Healthcare",
+                                "Financial Services",
+                                "Energy",
+                                "Consumer Cyclical",
+                                "Consumer Defensive",
+                                "Industrials",
+                                "Basic Materials",
+                                "Utilities",
+                                "Real Estate",
+                                "Communication Services",
+                            ],
+                        },
+                        "description": "List of sectors to filter by. Valid sectors: Technology, Healthcare, Financial Services, Energy, Consumer Cyclical, Consumer Defensive, Industrials, Basic Materials, Utilities, Real Estate, Communication Services.",
                     },
                     "limit": {
                         "type": "integer",
