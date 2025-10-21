@@ -105,4 +105,11 @@ prompt:
     [2] Tim Cook Leadership Profile – forbes.com/apple-ceo-profile
     [3] Apple Q4 2023 Earnings Call Transcript – seekingalpha.com/apple-q4-2023"
 
-parameters: []
+  user: |
+    {query}
+
+parameters:
+  - name: query
+    type: string
+    required: true
+    description: User's analysis request or question

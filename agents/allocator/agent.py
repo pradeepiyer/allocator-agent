@@ -44,8 +44,11 @@ class AllocatorAgent(BaseAgent):
         """
         logger.info(f"Analyzing stock {symbol} (continue={continue_conversation})")
 
-        # Render analyzer prompt with full investment principles
-        prompts = self.render_prompt("allocator", "analyzer")
+        # Build user query
+        user_query = f"Analyze {symbol} as a potential investment. Provide a comprehensive analysis covering all investment principles including management quality, capital allocation, financial metrics, competitive position, valuation, and technical setup. End with a clear investment recommendation."
+
+        # Render analyzer prompt with query parameter
+        prompts = self.render_prompt("allocator", "analyzer", query=user_query)
 
         # Get max iterations from agent config
         max_iterations = self.get_agent_config("max_iterations", get_config().agents.max_iterations)
@@ -53,12 +56,7 @@ class AllocatorAgent(BaseAgent):
         # Execute analysis with tools
         response = await self.execute_tool_conversation(
             instructions=prompts["instructions"],
-            initial_input=[
-                {
-                    "role": "user",
-                    "content": f"Analyze {symbol} as a potential investment. Provide a comprehensive analysis covering all investment principles including management quality, capital allocation, financial metrics, competitive position, valuation, and technical setup. End with a clear investment recommendation.",
-                }
-            ],
+            initial_input=[{"role": "user", "content": prompts["user"]}],
             tools=get_tool_definitions(),
             tool_executor=execute_tool,
             max_iterations=max_iterations,
@@ -83,8 +81,11 @@ class AllocatorAgent(BaseAgent):
         """
         logger.info(f"Finding similar stocks to {symbol} (continue={continue_conversation})")
 
-        # Render similarity prompt
-        prompts = self.render_prompt("allocator", "similarity")
+        # Build user query
+        user_query = f"Find stocks that are similar to {symbol}. IMPORTANT: First use the 'find_similar_companies' tool to programmatically discover candidate companies in the same sector/industry with similar characteristics. Then analyze the top candidates across multiple dimensions including business model, financial profile, management quality, and competitive position. Rank the results by similarity and explain what makes each one similar or different."
+
+        # Render similarity prompt with query parameter
+        prompts = self.render_prompt("allocator", "similarity", query=user_query)
 
         # Get max iterations
         max_iterations = self.get_agent_config("max_iterations", get_config().agents.max_iterations)
@@ -92,12 +93,7 @@ class AllocatorAgent(BaseAgent):
         # Execute similarity search
         response = await self.execute_tool_conversation(
             instructions=prompts["instructions"],
-            initial_input=[
-                {
-                    "role": "user",
-                    "content": f"Find stocks that are similar to {symbol}. IMPORTANT: First use the 'find_similar_companies' tool to programmatically discover candidate companies in the same sector/industry with similar characteristics. Then analyze the top candidates across multiple dimensions including business model, financial profile, management quality, and competitive position. Rank the results by similarity and explain what makes each one similar or different.",
-                }
-            ],
+            initial_input=[{"role": "user", "content": prompts["user"]}],
             tools=get_tool_definitions(),
             tool_executor=execute_tool,
             max_iterations=max_iterations,
@@ -157,22 +153,22 @@ class AllocatorAgent(BaseAgent):
         """
         logger.info(f"Screening for opportunities (criteria={criteria}, limit={limit})")
 
-        # Render screener prompt
-        prompts = self.render_prompt("allocator", "screener")
+        # Build user query
+        if criteria:
+            user_query = f"Screen the market database for investment opportunities matching these criteria: {criteria}. Return up to {limit} high-quality stocks ranked by quality score."
+        else:
+            user_query = f"Screen the market database for high-quality investment opportunities using the default investment principles (high ROIC, ROE, margins, low debt, insider ownership). Return up to {limit} stocks ranked by quality score."
+
+        # Render screener prompt with query parameter
+        prompts = self.render_prompt("allocator", "screener", query=user_query)
 
         # Get max iterations
         max_iterations = self.get_agent_config("max_iterations", get_config().agents.max_iterations)
 
-        # Build user prompt
-        if criteria:
-            user_prompt = f"Screen the market database for investment opportunities matching these criteria: {criteria}. Return up to {limit} high-quality stocks ranked by quality score."
-        else:
-            user_prompt = f"Screen the market database for high-quality investment opportunities using the default investment principles (high ROIC, ROE, margins, low debt, insider ownership). Return up to {limit} stocks ranked by quality score."
-
         # Execute screening with tools
         response = await self.execute_tool_conversation(
             instructions=prompts["instructions"],
-            initial_input=[{"role": "user", "content": user_prompt}],
+            initial_input=[{"role": "user", "content": prompts["user"]}],
             tools=get_tool_definitions(),
             tool_executor=execute_tool,
             max_iterations=max_iterations,
@@ -197,8 +193,8 @@ class AllocatorAgent(BaseAgent):
         """
         logger.info(f"Processing query (continue={continue_conversation}): {query[:100]}")
 
-        # Render analyzer prompt
-        prompts = self.render_prompt("allocator", "analyzer")
+        # Render analyzer prompt with query parameter
+        prompts = self.render_prompt("allocator", "analyzer", query=query)
 
         # Get max iterations
         max_iterations = self.get_agent_config("max_iterations", get_config().agents.max_iterations)
@@ -206,7 +202,7 @@ class AllocatorAgent(BaseAgent):
         # Execute conversation
         response = await self.execute_tool_conversation(
             instructions=prompts["instructions"],
-            initial_input=[{"role": "user", "content": query}],
+            initial_input=[{"role": "user", "content": prompts["user"]}],
             tools=get_tool_definitions(),
             tool_executor=execute_tool,
             max_iterations=max_iterations,

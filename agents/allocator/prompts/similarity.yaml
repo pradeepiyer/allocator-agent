@@ -120,4 +120,11 @@ prompt:
     [2] Satya Nadella Leadership Analysis – forbes.com/microsoft-ceo
     [3] Microsoft Q4 2023 Earnings Report – seekingalpha.com/microsoft-q4-2023"
 
-parameters: []
+  user: |
+    {query}
+
+parameters:
+  - name: query
+    type: string
+    required: true
+    description: User's similarity search request
