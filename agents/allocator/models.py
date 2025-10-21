@@ -58,3 +58,41 @@ class AllocatorReport(BaseModel):
     analysis: StockAnalysis
     similar_stocks: list[SimilarStock]
     sources: list[str]
+
+
+class KeyMetrics(BaseModel):
+    """Key financial metrics for a screened stock."""
+
+    model_config = {"extra": "forbid"}
+
+    roic: float
+    roe: float
+    profit_margin: float
+    debt_to_equity: float
+    insider_ownership_pct: float
+    forward_pe: float
+    market_cap: float
+
+
+class ScreenedStock(BaseModel):
+    """Stock identified through screening with quality score and metrics."""
+
+    model_config = {"extra": "forbid"}
+
+    symbol: str
+    name: str
+    sector: str
+    quality_score: int
+    key_strengths: list[str]
+    key_metrics: KeyMetrics
+
+
+class ScreeningResult(BaseModel):
+    """Result of screening the database for investment opportunities."""
+
+    model_config = {"extra": "forbid"}
+
+    screened_stocks: list[ScreenedStock]
+    total_analyzed: int
+    screening_criteria: str
+    sources: list[str]

@@ -17,7 +17,7 @@ from reportlab.pdfbase.pdfmetrics import registerFontFamily
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image
 
-from agents.allocator.models import AllocatorReport
+from agents.allocator.models import AllocatorReport, ScreeningResult
 from agents.allocator.tools import (
     get_insider_ownership,
     get_stock_fundamentals,
@@ -498,3 +498,161 @@ async def export_allocator_report_pdf(report: AllocatorReport, filename: str) ->
     # Build PDF
     doc.build(story)
     logger.info(f"Exported AllocatorReport to {filename}")
+
+
+def export_screening_result_pdf(result: ScreeningResult, filename: str) -> None:
+    """Export screening result to formatted PDF.
+
+    Args:
+        result: ScreeningResult Pydantic model
+        filename: Output PDF filename
+    """
+    doc = SimpleDocTemplate(filename, pagesize=letter, topMargin=0.75 * inch, bottomMargin=0.75 * inch)
+    story = []
+    styles_dict = getSampleStyleSheet()
+
+    # Custom styles with Unicode font
+    title_style = ParagraphStyle(
+        "CustomTitle",
+        parent=styles_dict["Heading1"],
+        fontSize=24,
+        textColor=colors.HexColor("#1f77b4"),
+        spaceAfter=12,
+        fontName="DejaVuSans-Bold",
+    )
+    heading_style = ParagraphStyle(
+        "CustomHeading", parent=styles_dict["Heading2"], fontSize=16, spaceAfter=10, fontName="DejaVuSans-Bold"
+    )
+    subheading_style = ParagraphStyle(
+        "CustomSubHeading", parent=styles_dict["Heading3"], fontSize=12, spaceAfter=8, fontName="DejaVuSans-Bold"
+    )
+    body_style = ParagraphStyle("DejaVuBody", parent=styles_dict["BodyText"], fontName="DejaVuSans")
+
+    # Title page
+    story.append(Paragraph("Investment Opportunities Screening Report", title_style))
+    story.append(Spacer(1, 0.2 * inch))
+
+    # Screening summary box
+    summary_data = [
+        ["Screening Criteria:", result.screening_criteria],
+        ["Total Analyzed:", str(result.total_analyzed)],
+        ["High-Quality Matches:", str(len(result.screened_stocks))],
+        ["Date:", datetime.now().strftime("%Y-%m-%d %H:%M")],
+    ]
+    summary_table = Table(summary_data, colWidths=[2.0 * inch, 4.5 * inch])
+    summary_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f0f0")),
+                ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("FONTNAME", (0, 0), (0, -1), "DejaVuSans-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "DejaVuSans"),
+                ("FONTSIZE", (0, 0), (-1, -1), 11),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ]
+        )
+    )
+    story.append(summary_table)
+    story.append(Spacer(1, 0.3 * inch))
+
+    # Summary table of all stocks
+    story.append(Paragraph("Ranked Investment Opportunities", heading_style))
+    story.append(Spacer(1, 0.1 * inch))
+
+    # Create summary table
+    table_data = [["Rank", "Symbol", "Company", "Sector", "Quality Score"]]
+    for i, stock in enumerate(result.screened_stocks, 1):
+        table_data.append([str(i), stock.symbol, stock.name[:30], stock.sector[:20], str(stock.quality_score)])
+
+    summary_stocks_table = Table(table_data, colWidths=[0.6 * inch, 0.8 * inch, 2.5 * inch, 1.5 * inch, 1.2 * inch])
+    summary_stocks_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f77b4")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("FONTNAME", (0, 0), (-1, 0), "DejaVuSans-Bold"),
+                ("FONTNAME", (0, 1), (-1, -1), "DejaVuSans"),
+                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                ("FONTSIZE", (0, 1), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9f9f9")]),
+            ]
+        )
+    )
+    story.append(summary_stocks_table)
+    story.append(PageBreak())
+
+    # Detailed analysis for each stock
+    story.append(Paragraph("Detailed Stock Analysis", heading_style))
+    story.append(Spacer(1, 0.2 * inch))
+
+    for i, stock in enumerate(result.screened_stocks, 1):
+        # Stock header
+        story.append(
+            Paragraph(
+                f"{i}. {stock.symbol} - {stock.name}",
+                subheading_style,
+            )
+        )
+        story.append(Paragraph(f"Sector: {stock.sector} | Quality Score: {stock.quality_score}/100", body_style))
+        story.append(Spacer(1, 0.1 * inch))
+
+        # Key strengths
+        story.append(Paragraph("<b>Key Strengths:</b>", body_style))
+        for strength in stock.key_strengths:
+            story.append(Paragraph(f"• {strength}", body_style))
+        story.append(Spacer(1, 0.1 * inch))
+
+        # Key metrics table
+        metrics = stock.key_metrics
+        metrics_data = [["Metric", "Value"]]
+
+        if metrics.roic is not None:
+            metrics_data.append(["ROIC", f"{metrics.roic*100:.1f}%"])
+        if metrics.roe is not None:
+            metrics_data.append(["ROE", f"{metrics.roe*100:.1f}%"])
+        if metrics.profit_margin is not None:
+            metrics_data.append(["Profit Margin", f"{metrics.profit_margin*100:.1f}%"])
+        if metrics.debt_to_equity is not None:
+            metrics_data.append(["Debt/Equity", f"{metrics.debt_to_equity:.2f}"])
+        if metrics.insider_ownership_pct is not None:
+            metrics_data.append(["Insider Ownership", f"{metrics.insider_ownership_pct*100:.1f}%"])
+        if metrics.forward_pe is not None:
+            metrics_data.append(["Forward P/E", f"{metrics.forward_pe:.1f}"])
+        if metrics.market_cap is not None:
+            market_cap_b = metrics.market_cap / 1_000_000_000
+            metrics_data.append(["Market Cap", f"${market_cap_b:.1f}B"])
+
+        metrics_table = Table(metrics_data, colWidths=[2.0 * inch, 2.0 * inch])
+        metrics_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8e8e8")),
+                    ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("FONTNAME", (0, 0), (-1, 0), "DejaVuSans-Bold"),
+                    ("FONTNAME", (0, 1), (-1, -1), "DejaVuSans"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ]
+            )
+        )
+        story.append(metrics_table)
+        story.append(Spacer(1, 0.3 * inch))
+
+    # Sources
+    if result.sources:
+        story.append(PageBreak())
+        story.append(Paragraph("Sources", heading_style))
+        for i, source in enumerate(result.sources, 1):
+            story.append(Paragraph(f"[{i}] {source}", body_style))
+            story.append(Spacer(1, 0.05 * inch))
+
+    # Build PDF
+    doc.build(story)
+    logger.info(f"Exported ScreeningResult to {filename}")

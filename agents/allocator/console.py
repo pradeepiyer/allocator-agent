@@ -7,7 +7,7 @@ from rich.console import Console
 
 from agent_kit.api.console.server import SlashCommands
 from agents.allocator.agent import AllocatorAgent
-from agents.allocator.models import AllocatorReport
+from agents.allocator.models import AllocatorReport, ScreeningResult
 
 
 class AllocatorCommands(SlashCommands):
@@ -23,6 +23,12 @@ class AllocatorCommands(SlashCommands):
             self._handle_analyse,
             "Generate comprehensive allocator report with PDF",
             "Comprehensive analysis with similar stocks and PDF export\nUsage: /analyse <symbol>\nExample: /analyse AAPL",
+        )
+        self.register_command(
+            "/screen",
+            self._handle_screen,
+            "Screen for high-quality investment opportunities",
+            "Find stocks matching investment principles (high ROIC, ROE, margins, low debt)\nUsage: /screen [optional criteria]\nExamples:\n  /screen\n  /screen tech stocks with high margins\n  /screen healthcare under $10B market cap",
         )
 
     def _format_allocator_report(self, report: AllocatorReport) -> str:
@@ -87,6 +93,60 @@ class AllocatorCommands(SlashCommands):
         if report.sources:
             lines.extend(["", "## Sources"])
             for i, source in enumerate(report.sources, 1):
+                lines.append(f"[{i}] {source}")
+
+        return "\n".join(lines)
+
+    def _format_screening_result(self, result: ScreeningResult) -> str:
+        """Format ScreeningResult model as readable markdown."""
+        lines = [
+            "# Investment Opportunities Screener",
+            "",
+            f"**Screening Criteria:** {result.screening_criteria}",
+            f"**Total Analyzed:** {result.total_analyzed}",
+            f"**High-Quality Matches:** {len(result.screened_stocks)}",
+            "",
+        ]
+
+        # Add each screened stock
+        for i, stock in enumerate(result.screened_stocks, 1):
+            lines.extend(
+                [
+                    f"## {i}. {stock.symbol} - {stock.name}",
+                    f"**Sector:** {stock.sector} | **Quality Score:** {stock.quality_score}/100",
+                    "",
+                    "### Key Strengths",
+                ]
+            )
+            for strength in stock.key_strengths:
+                lines.append(f"- {strength}")
+
+            lines.extend(["", "### Key Metrics"])
+
+            # Format metrics nicely
+            metrics = stock.key_metrics
+            if metrics.roic is not None:
+                lines.append(f"- ROIC: {metrics.roic*100:.1f}%")
+            if metrics.roe is not None:
+                lines.append(f"- ROE: {metrics.roe*100:.1f}%")
+            if metrics.profit_margin is not None:
+                lines.append(f"- Profit Margin: {metrics.profit_margin*100:.1f}%")
+            if metrics.debt_to_equity is not None:
+                lines.append(f"- Debt/Equity: {metrics.debt_to_equity:.2f}")
+            if metrics.insider_ownership_pct is not None:
+                lines.append(f"- Insider Ownership: {metrics.insider_ownership_pct*100:.1f}%")
+            if metrics.forward_pe is not None:
+                lines.append(f"- Forward P/E: {metrics.forward_pe:.1f}")
+            if metrics.market_cap is not None:
+                market_cap_b = metrics.market_cap / 1_000_000_000
+                lines.append(f"- Market Cap: ${market_cap_b:.1f}B")
+
+            lines.append("")
+
+        # Add sources
+        if result.sources:
+            lines.extend(["", "## Sources"])
+            for i, source in enumerate(result.sources, 1):
                 lines.append(f"[{i}] {source}")
 
         return "\n".join(lines)
@@ -162,6 +222,64 @@ class AllocatorCommands(SlashCommands):
             self.console.print("[dim]▶ Generating PDF report...[/dim]")
             await export_allocator_report_pdf(report, str(filepath))
             self.console.print(f"[green]✓ PDF report saved to {filepath}[/green]")
+            self.console.print()
+
+        except Exception as e:
+            self.console.print(f"[red]Error: {e}[/red]")
+
+    async def _handle_screen(self, args: list[str]) -> None:
+        """Handle /screen command for opportunity screening.
+
+        Args:
+            args: Optional screening criteria from user
+        """
+        if not self.session_id:
+            self.console.print("[red]Session not initialized[/red]")
+            return
+
+        # Join args to form criteria string (if any)
+        criteria = " ".join(args) if args else None
+
+        if criteria:
+            self.console.print(f"[dim]▶ Screening for opportunities: {criteria}...[/dim]")
+        else:
+            self.console.print("[dim]▶ Screening for high-quality investment opportunities...[/dim]")
+        self.console.print()
+
+        try:
+            session = await self.session_store.get_session(self.session_id)
+            if not session:
+                self.console.print("[red]Session not found[/red]")
+                return
+
+            agent = cast(AllocatorAgent, await session.use_agent(AllocatorAgent))
+            result = await agent.screen_opportunities(criteria=criteria, limit=20, continue_conversation=False)
+
+            # Display formatted result
+            formatted = self._format_screening_result(result)
+            self.console.print(formatted, markup=False)
+            self.console.print()
+
+            # Generate PDF automatically
+            from datetime import datetime
+            from agents.allocator.export import export_screening_result_pdf
+
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            filename = f"screening-{timestamp}.pdf"
+
+            reports_dir = Path("reports")
+            reports_dir.mkdir(exist_ok=True)
+            filepath = reports_dir / filename
+
+            self.console.print("[dim]▶ Generating PDF report...[/dim]")
+            export_screening_result_pdf(result, str(filepath))
+            self.console.print(f"[green]✓ PDF report saved to {filepath}[/green]")
+            self.console.print()
+
+            # Show follow-up hint
+            self.console.print(
+                "[dim]💡 Tip: You can ask follow-up questions like 'tell me more about #3' or 'analyze AAPL and export PDF'[/dim]"
+            )
             self.console.print()
 
         except Exception as e:

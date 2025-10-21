@@ -1279,6 +1279,417 @@ async def find_similar_companies(symbol: str, limit: int = 10) -> dict[str, Any]
         return {"error": str(e), "symbol": symbol}
 
 
+async def screen_database_initial(
+    min_roic: float | None = None,
+    min_roe: float | None = None,
+    min_profit_margin: float | None = None,
+    max_debt_to_equity: float | None = None,
+    min_market_cap: float | None = None,
+    max_market_cap: float | None = None,
+    sectors: list[str] | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Initial screening with minimal data for fast candidate identification.
+
+    Queries database with filters but returns only essential fields to minimize
+    token usage. Use this for Stage 1 screening to identify promising candidates.
+
+    Args:
+        min_roic: Minimum ROIC (as decimal, e.g., 0.15 for 15%)
+        min_roe: Minimum ROE (as decimal, e.g., 0.15 for 15%)
+        min_profit_margin: Minimum profit margin (as decimal, e.g., 0.10 for 10%)
+        max_debt_to_equity: Maximum debt-to-equity ratio
+        min_market_cap: Minimum market cap in dollars
+        max_market_cap: Maximum market cap in dollars
+        sectors: List of sectors to include (e.g., ["Technology", "Healthcare"])
+        limit: Maximum number of results to return
+
+    Returns:
+        Dictionary with list of stocks (minimal fields) and filters applied
+    """
+    try:
+        with db.get_db_connection() as conn:
+            # Initial screening query with essential fields for Stage 1 evaluation
+            query = """
+                SELECT DISTINCT
+                    s.symbol,
+                    s.name,
+                    s.sector,
+                    s.market_cap,
+                    f.roic,
+                    f.roe,
+                    f.profit_margin,
+                    f.debt_to_equity,
+                    f.free_cash_flow,
+                    f.operating_cash_flow,
+                    o.insider_ownership_pct,
+                    o.institutional_ownership_pct
+                FROM stocks s
+                LEFT JOIN (
+                    SELECT symbol, roic, roe, profit_margin, debt_to_equity,
+                           free_cash_flow, operating_cash_flow
+                    FROM fundamentals_annual f1
+                    WHERE fiscal_year = (
+                        SELECT MAX(fiscal_year)
+                        FROM fundamentals_annual f2
+                        WHERE f2.symbol = f1.symbol
+                    )
+                ) f ON s.symbol = f.symbol
+                LEFT JOIN (
+                    SELECT symbol, insider_ownership_pct, institutional_ownership_pct
+                    FROM ownership o1
+                    WHERE as_of_date = (
+                        SELECT MAX(as_of_date)
+                        FROM ownership o2
+                        WHERE o2.symbol = o1.symbol
+                    )
+                ) o ON s.symbol = o.symbol
+                WHERE 1=1
+            """
+
+            params = []
+
+            # Add filters
+            if min_roic is not None:
+                query += " AND f.roic >= ?"
+                params.append(min_roic)
+
+            if min_roe is not None:
+                query += " AND f.roe >= ?"
+                params.append(min_roe)
+
+            if min_profit_margin is not None:
+                query += " AND f.profit_margin >= ?"
+                params.append(min_profit_margin)
+
+            if max_debt_to_equity is not None:
+                # Can't filter by debt in initial query if we don't fetch it
+                # Skip this filter for initial screening
+                pass
+
+            if min_market_cap is not None:
+                query += " AND s.market_cap >= ?"
+                params.append(min_market_cap)
+
+            if max_market_cap is not None:
+                query += " AND s.market_cap <= ?"
+                params.append(max_market_cap)
+
+            if sectors:
+                placeholders = ",".join("?" * len(sectors))
+                query += f" AND s.sector IN ({placeholders})"
+                params.extend(sectors)
+
+            # Order by ROIC descending
+            query += " ORDER BY f.roic DESC, f.roe DESC LIMIT ?"
+            params.append(limit)
+
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            # Convert to dictionaries with Stage 1 fields
+            stocks = []
+            for row in rows:
+                stocks.append(
+                    {
+                        "symbol": row["symbol"],
+                        "name": row["name"],
+                        "sector": row["sector"],
+                        "market_cap": row["market_cap"],
+                        "roic": row["roic"],
+                        "roe": row["roe"],
+                        "profit_margin": row["profit_margin"],
+                        "debt_to_equity": row["debt_to_equity"],
+                        "free_cash_flow": row["free_cash_flow"],
+                        "operating_cash_flow": row["operating_cash_flow"],
+                        "insider_ownership_pct": row["insider_ownership_pct"],
+                        "institutional_ownership_pct": row["institutional_ownership_pct"],
+                    }
+                )
+
+            logger.info(f"Initial screening returned {len(stocks)} candidates")
+
+            return {
+                "stocks": stocks,
+                "total_found": len(stocks),
+                "filters_applied": {
+                    "min_roic": min_roic,
+                    "min_roe": min_roe,
+                    "min_profit_margin": min_profit_margin,
+                    "min_market_cap": min_market_cap,
+                    "max_market_cap": max_market_cap,
+                    "sectors": sectors,
+                },
+            }
+
+    except Exception as e:
+        logger.error(f"Error in initial screening: {e}")
+        return {"error": str(e), "stocks": []}
+
+
+async def get_detailed_metrics(symbols: list[str]) -> dict[str, Any]:
+    """Get detailed metrics for specific stock symbols.
+
+    Fetches comprehensive financial data for finalist stocks identified in
+    Stage 1 screening. Use this for Stage 2 detailed analysis.
+
+    Args:
+        symbols: List of stock ticker symbols to get details for
+
+    Returns:
+        Dictionary with detailed stock information for each symbol
+    """
+    try:
+        if not symbols:
+            return {"stocks": [], "total_found": 0}
+
+        with db.get_db_connection() as conn:
+            # Detailed query with all fields
+            placeholders = ",".join("?" * len(symbols))
+            query = f"""
+                SELECT DISTINCT
+                    s.symbol,
+                    s.name,
+                    s.sector,
+                    s.industry,
+                    s.market_cap,
+                    f.roic,
+                    f.roe,
+                    f.profit_margin,
+                    f.debt_to_equity,
+                    f.current_ratio,
+                    f.free_cash_flow,
+                    f.operating_cash_flow,
+                    o.insider_ownership_pct,
+                    o.institutional_ownership_pct,
+                    s.forward_pe,
+                    s.peg_ratio,
+                    s.beta
+                FROM stocks s
+                LEFT JOIN (
+                    SELECT symbol, roic, roe, profit_margin, debt_to_equity,
+                           current_ratio, free_cash_flow, operating_cash_flow
+                    FROM fundamentals_annual f1
+                    WHERE fiscal_year = (
+                        SELECT MAX(fiscal_year)
+                        FROM fundamentals_annual f2
+                        WHERE f2.symbol = f1.symbol
+                    )
+                ) f ON s.symbol = f.symbol
+                LEFT JOIN (
+                    SELECT symbol, insider_ownership_pct, institutional_ownership_pct
+                    FROM ownership o1
+                    WHERE as_of_date = (
+                        SELECT MAX(as_of_date)
+                        FROM ownership o2
+                        WHERE o2.symbol = o1.symbol
+                    )
+                ) o ON s.symbol = o.symbol
+                WHERE s.symbol IN ({placeholders})
+            """
+
+            cursor = conn.cursor()
+            cursor.execute(query, symbols)
+            rows = cursor.fetchall()
+
+            # Convert to detailed dictionaries
+            stocks = []
+            for row in rows:
+                stocks.append(
+                    {
+                        "symbol": row["symbol"],
+                        "name": row["name"],
+                        "sector": row["sector"],
+                        "industry": row["industry"],
+                        "market_cap": row["market_cap"],
+                        "roic": row["roic"],
+                        "roe": row["roe"],
+                        "profit_margin": row["profit_margin"],
+                        "debt_to_equity": row["debt_to_equity"],
+                        "current_ratio": row["current_ratio"],
+                        "free_cash_flow": row["free_cash_flow"],
+                        "operating_cash_flow": row["operating_cash_flow"],
+                        "insider_ownership_pct": row["insider_ownership_pct"],
+                        "institutional_ownership_pct": row["institutional_ownership_pct"],
+                        "forward_pe": row["forward_pe"],
+                        "peg_ratio": row["peg_ratio"],
+                        "beta": row["beta"],
+                    }
+                )
+
+            logger.info(f"Fetched detailed metrics for {len(stocks)} stocks")
+
+            return {"stocks": stocks, "total_found": len(stocks)}
+
+    except Exception as e:
+        logger.error(f"Error fetching detailed metrics: {e}")
+        return {"error": str(e), "stocks": []}
+
+
+async def screen_database(
+    min_roic: float | None = None,
+    min_roe: float | None = None,
+    min_profit_margin: float | None = None,
+    max_debt_to_equity: float | None = None,
+    min_market_cap: float | None = None,
+    max_market_cap: float | None = None,
+    sectors: list[str] | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Screen database for investment opportunities using quantitative filters.
+
+    Queries fundamentals_annual, stocks, and ownership tables to find companies
+    matching the specified criteria.
+
+    Args:
+        min_roic: Minimum ROIC (as decimal, e.g., 0.15 for 15%)
+        min_roe: Minimum ROE (as decimal, e.g., 0.15 for 15%)
+        min_profit_margin: Minimum profit margin (as decimal, e.g., 0.10 for 10%)
+        max_debt_to_equity: Maximum debt-to-equity ratio
+        min_market_cap: Minimum market cap in dollars
+        max_market_cap: Maximum market cap in dollars
+        sectors: List of sectors to include (e.g., ["Technology", "Healthcare"])
+        limit: Maximum number of results to return
+
+    Returns:
+        Dictionary with list of stocks matching criteria and their key metrics
+    """
+    try:
+        with db.get_db_connection() as conn:
+            # Build query dynamically based on provided filters
+            query = """
+                SELECT DISTINCT
+                    s.symbol,
+                    s.name,
+                    s.sector,
+                    s.industry,
+                    s.market_cap,
+                    f.roic,
+                    f.roe,
+                    f.roa,
+                    f.profit_margin,
+                    f.operating_margin,
+                    f.gross_margin,
+                    f.debt_to_equity,
+                    f.current_ratio,
+                    f.free_cash_flow,
+                    f.operating_cash_flow,
+                    o.insider_ownership_pct,
+                    o.institutional_ownership_pct,
+                    s.forward_pe,
+                    s.peg_ratio,
+                    s.beta
+                FROM stocks s
+                LEFT JOIN (
+                    SELECT symbol, roic, roe, roa, profit_margin, operating_margin, gross_margin,
+                           debt_to_equity, current_ratio, free_cash_flow, operating_cash_flow
+                    FROM fundamentals_annual f1
+                    WHERE fiscal_year = (
+                        SELECT MAX(fiscal_year)
+                        FROM fundamentals_annual f2
+                        WHERE f2.symbol = f1.symbol
+                    )
+                ) f ON s.symbol = f.symbol
+                LEFT JOIN (
+                    SELECT symbol, insider_ownership_pct, institutional_ownership_pct
+                    FROM ownership o1
+                    WHERE as_of_date = (
+                        SELECT MAX(as_of_date)
+                        FROM ownership o2
+                        WHERE o2.symbol = o1.symbol
+                    )
+                ) o ON s.symbol = o.symbol
+                WHERE 1=1
+            """
+
+            params = []
+
+            # Add filters
+            if min_roic is not None:
+                query += " AND f.roic >= ?"
+                params.append(min_roic)
+
+            if min_roe is not None:
+                query += " AND f.roe >= ?"
+                params.append(min_roe)
+
+            if min_profit_margin is not None:
+                query += " AND f.profit_margin >= ?"
+                params.append(min_profit_margin)
+
+            if max_debt_to_equity is not None:
+                query += " AND (f.debt_to_equity <= ? OR f.debt_to_equity IS NULL)"
+                params.append(max_debt_to_equity)
+
+            if min_market_cap is not None:
+                query += " AND s.market_cap >= ?"
+                params.append(min_market_cap)
+
+            if max_market_cap is not None:
+                query += " AND s.market_cap <= ?"
+                params.append(max_market_cap)
+
+            if sectors:
+                placeholders = ",".join("?" * len(sectors))
+                query += f" AND s.sector IN ({placeholders})"
+                params.extend(sectors)
+
+            # Order by ROIC descending (prioritize capital efficiency)
+            query += " ORDER BY f.roic DESC, f.roe DESC LIMIT ?"
+            params.append(limit)
+
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            # Convert to list of dictionaries
+            stocks = []
+            for row in rows:
+                stocks.append(
+                    {
+                        "symbol": row["symbol"],
+                        "name": row["name"],
+                        "sector": row["sector"],
+                        "industry": row["industry"],
+                        "market_cap": row["market_cap"],
+                        "roic": row["roic"],
+                        "roe": row["roe"],
+                        "roa": row["roa"],
+                        "profit_margin": row["profit_margin"],
+                        "operating_margin": row["operating_margin"],
+                        "gross_margin": row["gross_margin"],
+                        "debt_to_equity": row["debt_to_equity"],
+                        "current_ratio": row["current_ratio"],
+                        "free_cash_flow": row["free_cash_flow"],
+                        "operating_cash_flow": row["operating_cash_flow"],
+                        "insider_ownership_pct": row["insider_ownership_pct"],
+                        "institutional_ownership_pct": row["institutional_ownership_pct"],
+                        "forward_pe": row["forward_pe"],
+                        "peg_ratio": row["peg_ratio"],
+                        "beta": row["beta"],
+                    }
+                )
+
+            return {
+                "stocks": stocks,
+                "total_found": len(stocks),
+                "filters_applied": {
+                    "min_roic": min_roic,
+                    "min_roe": min_roe,
+                    "min_profit_margin": min_profit_margin,
+                    "max_debt_to_equity": max_debt_to_equity,
+                    "min_market_cap": min_market_cap,
+                    "max_market_cap": max_market_cap,
+                    "sectors": sectors,
+                },
+            }
+
+    except Exception as e:
+        logger.error(f"Error screening database: {e}")
+        return {"error": str(e), "stocks": []}
+
+
 def get_tool_definitions() -> list[dict[str, Any]]:
     """Get tool definitions for OpenAI API.
 
@@ -1407,6 +1818,108 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "required": ["symbol"],
             },
         },
+        {
+            "type": "function",
+            "name": "screen_database_initial",
+            "description": "STAGE 1: Initial screening for fast candidate identification. Returns up to 100 stocks with key fields: symbol, name, sector, market_cap, roic, roe, profit_margin, debt_to_equity, free_cash_flow, operating_cash_flow, insider_ownership_pct, institutional_ownership_pct. Use this first to get a broad pool and identify 25-30 finalists.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "min_roic": {
+                        "type": "number",
+                        "description": "Minimum ROIC as decimal (e.g., 0.15 for 15%).",
+                    },
+                    "min_roe": {
+                        "type": "number",
+                        "description": "Minimum ROE as decimal (e.g., 0.15 for 15%).",
+                    },
+                    "min_profit_margin": {
+                        "type": "number",
+                        "description": "Minimum profit margin as decimal (e.g., 0.10 for 10%).",
+                    },
+                    "min_market_cap": {
+                        "type": "number",
+                        "description": "Minimum market cap in dollars (e.g., 500000000 for $500M).",
+                    },
+                    "max_market_cap": {
+                        "type": "number",
+                        "description": "Maximum market cap in dollars (e.g., 500000000000 for $500B).",
+                    },
+                    "sectors": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of sectors to include. Omit to search all sectors.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results (default 50, can go up to 100 for broader pool)",
+                        "default": 50,
+                    },
+                },
+                "required": [],
+            },
+        },
+        {
+            "type": "function",
+            "name": "get_detailed_metrics",
+            "description": "STAGE 2: Get comprehensive metrics for specific stocks identified as finalists. Returns detailed financial data including debt, ownership, cash flow, valuation multiples. Use this after initial screening to analyze top candidates.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbols": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of stock ticker symbols to get detailed metrics for (e.g., ['NVDA', 'AAPL', 'MSFT'])",
+                    },
+                },
+                "required": ["symbols"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "screen_database",
+            "description": "DEPRECATED: Single-stage screening (use screen_database_initial + get_detailed_metrics instead for better performance). Returns stocks with all fields in one query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "min_roic": {
+                        "type": "number",
+                        "description": "Minimum ROIC as decimal (e.g., 0.15 for 15%). High ROIC indicates efficient capital allocation.",
+                    },
+                    "min_roe": {
+                        "type": "number",
+                        "description": "Minimum ROE as decimal (e.g., 0.15 for 15%). High ROE shows strong returns to shareholders.",
+                    },
+                    "min_profit_margin": {
+                        "type": "number",
+                        "description": "Minimum profit margin as decimal (e.g., 0.10 for 10%). High margins indicate pricing power.",
+                    },
+                    "max_debt_to_equity": {
+                        "type": "number",
+                        "description": "Maximum debt-to-equity ratio (e.g., 1.0). Lower is better for balance sheet strength.",
+                    },
+                    "min_market_cap": {
+                        "type": "number",
+                        "description": "Minimum market cap in dollars (e.g., 1000000000 for $1B).",
+                    },
+                    "max_market_cap": {
+                        "type": "number",
+                        "description": "Maximum market cap in dollars (e.g., 500000000000 for $500B).",
+                    },
+                    "sectors": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of sectors to include (e.g., ['Technology', 'Healthcare']). Omit to search all sectors.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default 50)",
+                        "default": 50,
+                    },
+                },
+                "required": [],
+            },
+        },
     ]
 
 
@@ -1434,6 +1947,9 @@ async def execute_tool(tool_name: str, tool_args: dict[str, Any]) -> dict[str, A
         "get_financial_history": get_financial_history,
         "calculate_similarity": calculate_similarity,
         "find_similar_companies": find_similar_companies,
+        "screen_database_initial": screen_database_initial,
+        "get_detailed_metrics": get_detailed_metrics,
+        "screen_database": screen_database,
     }
 
     if tool_name not in tool_map:

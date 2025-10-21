@@ -8,10 +8,11 @@ Allocator Agent is built on [agent-kit](https://github.com/pradeepiyer/agent-kit
 
 - **Owner-operator mindset**: Focus on management quality and skin in the game
 - **Capital allocation excellence**: Track record of smart buybacks, M&A, and capital deployment
-- **Financial quality**: High ROIC, ROE, margins, and strong balance sheets
+- **Financial quality**: High ROIC, ROE, margins, and strong balance sheets with low to no debt
 - **Competitive moats**: Sustainable competitive advantages
 - **Reasonable valuations**: Price discipline and margin of safety
-- **Technical analysis**: Entry/exit timing and momentum
+- **Incentive Alignment**: Management incentives are aligned with long term growth of businss, not short term stock marget valuation gains.
+- **Capital Requirements**: Prefer business that are capital light, low debt, high profit margins and sustainable cash flow. 
 
 ## Features
 

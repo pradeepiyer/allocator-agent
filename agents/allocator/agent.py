@@ -8,7 +8,7 @@ from agent_kit.clients.openai_client import OpenAIClient
 from agent_kit.config.config import get_config
 from agent_kit.prompts.loader import PromptLoader
 
-from agents.allocator.models import AllocatorReport, SimilarStocksResult, StockAnalysis
+from agents.allocator.models import AllocatorReport, ScreeningResult, SimilarStocksResult, StockAnalysis
 from agents.allocator.tools import execute_tool, get_tool_definitions
 
 logger = logging.getLogger(__name__)
@@ -138,6 +138,49 @@ class AllocatorAgent(BaseAgent):
 
         logger.info(f"Generated allocator report for {symbol} with {len(report.similar_stocks)} similar stocks")
         return report
+
+    async def screen_opportunities(
+        self, criteria: str | None = None, limit: int = 20, continue_conversation: bool = False
+    ) -> ScreeningResult:
+        """Screen the market database for high-quality investment opportunities.
+
+        Uses the screener prompt to apply investment principles and identify stocks
+        that meet quality criteria. Returns ranked list of opportunities with scores.
+
+        Args:
+            criteria: Optional custom screening criteria from user (e.g., "tech stocks with high ROIC")
+            limit: Maximum number of results to return (default 20)
+            continue_conversation: If True, continues previous conversation
+
+        Returns:
+            ScreeningResult with ranked list of investment opportunities
+        """
+        logger.info(f"Screening for opportunities (criteria={criteria}, limit={limit})")
+
+        # Render screener prompt
+        prompts = self.render_prompt("allocator", "screener")
+
+        # Get max iterations
+        max_iterations = self.get_agent_config("max_iterations", get_config().agents.max_iterations)
+
+        # Build user prompt
+        if criteria:
+            user_prompt = f"Screen the market database for investment opportunities matching these criteria: {criteria}. Return up to {limit} high-quality stocks ranked by quality score."
+        else:
+            user_prompt = f"Screen the market database for high-quality investment opportunities using the default investment principles (high ROIC, ROE, margins, low debt, insider ownership). Return up to {limit} stocks ranked by quality score."
+
+        # Execute screening with tools
+        response = await self.execute_tool_conversation(
+            instructions=prompts["instructions"],
+            initial_input=[{"role": "user", "content": user_prompt}],
+            tools=get_tool_definitions(),
+            tool_executor=execute_tool,
+            max_iterations=max_iterations,
+            previous_response_id=self.last_response_id if continue_conversation else None,
+            response_format=ScreeningResult,
+        )
+
+        return response
 
     async def process(self, query: str, continue_conversation: bool = False) -> str:
         """Process a general query with investment analysis context.

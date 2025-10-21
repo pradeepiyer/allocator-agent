@@ -1,5 +1,5 @@
 agent: allocator
-function: orchestrator
+function: analyzer
 prompt:
   instructions: |
     # Role and Objective
