@@ -20,8 +20,8 @@ Usage:
     # Refresh specific symbols
     uv run python scripts/refresh_market_data.py --symbols AAPL MSFT GOOGL
 
-    # Refresh S&P 500 only
-    uv run python scripts/refresh_market_data.py --index sp500
+    # Refresh Russell 3000 only
+    uv run python scripts/refresh_market_data.py --index russell3000
 
 Estimated time: 45-90 minutes for all stocks
 """
@@ -644,7 +644,7 @@ async def main():
     """Main execution."""
     parser = argparse.ArgumentParser(description="Refresh market database")
     parser.add_argument("--symbols", nargs="+", help="Specific symbols to refresh (e.g., AAPL MSFT)")
-    parser.add_argument("--index", choices=["sp500", "russell2000"], help="Refresh specific index")
+    parser.add_argument("--index", choices=["russell3000"], help="Refresh specific index")
     args = parser.parse_args()
 
     logger.info("=" * 80)

@@ -31,7 +31,7 @@ Discover new high-quality investment opportunities using a two-stage LLM-powered
 - Scores and ranks top 20 opportunities
 
 **Features:**
-- Screens from database of 2000+ stocks with cached financial data
+- Screens from database of 3000+ stocks (Russell 3000) with cached financial data
 - Evaluates across 8 investment dimensions
 - Quality scoring (0-100) based on financial metrics, ownership, business model
 - Automatic PDF export to `reports/screening-{timestamp}.pdf`
@@ -73,7 +73,7 @@ Interactive analysis with follow-up questions:
 ### 🗄️ Data Infrastructure
 
 **Market Database**
-- 2000+ stocks with comprehensive financial data
+- 3000+ stocks (Russell 3000 index) with comprehensive financial data
 - Annual fundamentals (ROIC, ROE, margins, cash flow, balance sheet)
 - Quarterly share counts and buyback data
 - Insider ownership and transactions
@@ -139,7 +139,7 @@ uv run python -m allocator.main
 /screen
 ```
 Discovers high-quality stocks matching investment criteria:
-- Screens 2000+ stocks from database
+- Screens 3000+ stocks (Russell 3000) from database
 - Two-stage filtering for efficiency
 - Returns top 20 ranked by quality score
 - Automatic PDF export to `reports/`
@@ -245,7 +245,7 @@ allocator-agent/
 │       ├── main.py               # Entry point
 │       ├── config.yaml           # Agent configuration
 │       ├── data/
-│       │   └── market.db         # SQLite cache (705MB, 5000+ stocks)
+│       │   └── market.db         # SQLite cache (Russell 3000, ~3000 stocks)
 │       └── prompts/
 │           ├── analyzer.yaml     # Stock analysis principles
 │           ├── similarity.yaml   # Similar company discovery

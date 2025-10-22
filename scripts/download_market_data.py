@@ -1,12 +1,12 @@
 """Download historical market data and build SQLite database.
 
-Downloads 10 years of financial data for S&P 500 and Russell 2000 stocks.
+Downloads 10 years of financial data for Russell 3000 stocks.
 Creates database at: agents/allocator/data/market.db
 
 Usage:
     uv run python scripts/download_market_data.py
 
-Estimated time: 4-5 hours for ~2500 stocks
+Estimated time: 5-6 hours for ~3000 stocks
 """
 
 import asyncio
@@ -1103,30 +1103,19 @@ async def main():
     data_dir = project_root / "agents" / "allocator" / "data"
     db_path = data_dir / "market.db"
 
-    # Load symbol lists
-    sp500_file = data_dir / "sp500_symbols.json"
-    russell2000_file = data_dir / "russell2000_symbols.json"
+    # Load symbol list
+    russell3000_file = data_dir / "russell3000_symbols.json"
 
-    if not sp500_file.exists() or not russell2000_file.exists():
-        logger.error("Symbol files not found. Run download_symbols.py first.")
-        logger.error("Expected files:")
-        logger.error(f"  - {sp500_file}")
-        logger.error(f"  - {russell2000_file}")
+    if not russell3000_file.exists():
+        logger.error("Symbol file not found. Run download_symbols.py first.")
+        logger.error(f"Expected file: {russell3000_file}")
         return
 
-    with open(sp500_file) as f:
-        sp500_symbols = json.load(f)
+    with open(russell3000_file) as f:
+        all_symbols = json.load(f)
 
-    with open(russell2000_file) as f:
-        russell2000_symbols = json.load(f)
-
-    # Combine and deduplicate
-    all_symbols = sorted(list(set(sp500_symbols + russell2000_symbols)))
-
-    logger.info("Symbol lists loaded:")
-    logger.info(f"  S&P 500: {len(sp500_symbols)} symbols")
-    logger.info(f"  Russell 2000: {len(russell2000_symbols)} symbols")
-    logger.info(f"  Total unique: {len(all_symbols)} symbols")
+    logger.info("Symbol list loaded:")
+    logger.info(f"  Russell 3000: {len(all_symbols)} symbols")
     logger.info("")
 
     # Initialize downloader
