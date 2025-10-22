@@ -801,6 +801,10 @@ async def get_technical_indicators(symbol: str, period: str = "1y") -> dict[str,
                 latest_hist = stock.history(period="5d")  # Get last few days to fill any gap
 
                 if not latest_hist.empty:
+                    # Normalize timezones before merging (DB is tz-naive, yfinance is tz-aware)
+                    if latest_hist.index.tz is not None:
+                        latest_hist.index = latest_hist.index.tz_localize(None)
+
                     # Merge latest data with DB data (avoid duplicates by date)
                     hist = pd.concat([hist, latest_hist]).loc[
                         ~pd.concat([hist, latest_hist]).index.duplicated(keep="last")
@@ -820,6 +824,10 @@ async def get_technical_indicators(symbol: str, period: str = "1y") -> dict[str,
 
             stock = yf.Ticker(symbol)
             hist = stock.history(period=period)
+
+            # Normalize timezone (yfinance returns tz-aware, DB expects tz-naive)
+            if not hist.empty and hist.index.tz is not None:
+                hist.index = hist.index.tz_localize(None)
 
             # Write to DB
             if not hist.empty:
