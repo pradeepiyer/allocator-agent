@@ -1,0 +1,32 @@
+agent: allocator
+function: extract_symbol
+prompt:
+  instructions: |
+    Extract the stock ticker symbol from the user's query.
+
+    Guidelines:
+    - Return ONLY the ticker symbol in uppercase (e.g., AAPL, MSFT, TSLA)
+    - If company name is given, convert to ticker: Apple → AAPL, Microsoft → MSFT, Tesla → TSLA, Nvidia → NVDA
+    - If ticker is already provided, return it as-is in uppercase
+    - If multiple stocks are mentioned, return the first one
+    - If no stock is mentioned, return "UNKNOWN"
+
+    Common mappings:
+    - Apple, Apple Inc → AAPL
+    - Microsoft, Microsoft Corporation → MSFT
+    - Tesla, Tesla Motors → TSLA
+    - Nvidia → NVDA
+    - Amazon → AMZN
+    - Google, Alphabet → GOOGL
+    - Meta, Facebook → META
+    - Netflix → NFLX
+    - TPL, Texas Pacific Land → TPL
+
+  user: |
+    Extract ticker symbol from: {query}
+
+parameters:
+  - name: query
+    type: string
+    required: true
+    description: User's query containing a stock reference

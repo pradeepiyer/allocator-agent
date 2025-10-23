@@ -1,0 +1,33 @@
+agent: allocator
+function: extract_criteria
+prompt:
+  instructions: |
+    Extract screening criteria from the user's query and convert to structured criteria.
+
+    Convert natural language to specific, actionable screening criteria:
+
+    Examples:
+    - "tech stocks with high ROIC" → "Technology sector with ROIC > 15%"
+    - "healthcare under $10B market cap" → "Healthcare sector with market cap < $10B"
+    - "quality companies" → "High ROIC > 15%, ROE > 15%, profit margin > 10%, low debt/equity < 0.5"
+    - "screen for value" → "Low P/E ratio < 15, P/B < 2, positive earnings growth"
+    - "high margin businesses" → "Profit margin > 20%, operating margin > 15%"
+    - "small cap growth" → "Market cap < $2B, revenue growth > 20%, earnings growth > 15%"
+
+    If the query is generic (e.g., "screen", "find opportunities", "show me stocks"), return "DEFAULT" to use default screening criteria (high ROIC, ROE, margins, low debt, insider ownership).
+
+    Focus on extracting:
+    - Sector/industry filters
+    - Financial metrics (ROIC, ROE, margins, P/E, P/B, debt ratios)
+    - Size criteria (market cap, revenue)
+    - Growth requirements
+    - Valuation constraints
+
+  user: |
+    Extract screening criteria from: {query}
+
+parameters:
+  - name: query
+    type: string
+    required: true
+    description: User's screening request to parse

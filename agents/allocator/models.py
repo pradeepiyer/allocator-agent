@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StockAnalysis(BaseModel):
@@ -96,3 +96,17 @@ class ScreeningResult(BaseModel):
     total_analyzed: int
     screening_criteria: str
     sources: list[str]
+
+
+class AllocatorRequest(BaseModel):
+    """Unified request model for allocator agent (REST/MCP interfaces)."""
+
+    query: str = Field(..., description="Natural language investment query")
+    session_id: str | None = Field(None, description="Session ID for conversation continuation")
+
+
+class AllocatorResponse(BaseModel):
+    """Unified response model for allocator agent (REST/MCP interfaces)."""
+
+    response: str = Field(..., description="Analysis response (JSON for structured outputs)")
+    session_id: str = Field(..., description="Session ID")
