@@ -14,7 +14,7 @@ AI-powered capital allocation agent for stock analysis using fundamental investi
 ## Architecture
 - **AllocatorAgent**: Extends BaseAgent with 4 methods (analyze, similar, screen, process)
 - **Tools**: 10 financial data tools in `tools.py` (fundamentals, ownership, technical, valuation)
-- **Prompts**: 3 YAML files encoding investment principles (orchestrator, similarity, screener)
+- **Prompts**: 6 YAML files encoding investment principles (analyzer, similarity, screener) and routing logic (classifier, extract_symbol, extract_criteria)
 - **Console**: Interactive CLI with slash commands (`/analyze`, `/similar`, `/screen`)
 - **Session Management**: Thread-safe sessions via agent-kit
 
@@ -40,7 +40,7 @@ Analysis framework covers 8 dimensions:
 ```python
 # Standard pattern: render prompt → execute_tool_conversation → extract text
 async def analyze_stock(self, symbol: str, continue_conversation: bool = False) -> str:
-    prompts = self.render_prompt("allocator", "orchestrator")
+    prompts = self.render_prompt("allocator", "analyzer")
 
     response = await self.execute_tool_conversation(
         instructions=prompts["instructions"],
