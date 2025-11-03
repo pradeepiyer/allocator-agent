@@ -320,13 +320,12 @@ def _create_price_chart(symbol: str, period: str = "6mo") -> io.BytesIO | None:
         return None
 
 
-async def export_allocator_report_pdf(report: AllocatorReport, filename: str, skip_analysis: bool = False) -> None:
+async def export_allocator_report_pdf(report: AllocatorReport, filename: str) -> None:
     """Export comprehensive AllocatorReport to formatted PDF.
 
     Args:
         report: AllocatorReport Pydantic model
         filename: Output PDF filename
-        skip_analysis: If True, skip stock analysis and only show similar stocks comparison
     """
     doc = SimpleDocTemplate(filename, pagesize=letter, topMargin=0.75 * inch, bottomMargin=0.75 * inch)
     story = []
@@ -353,47 +352,42 @@ async def export_allocator_report_pdf(report: AllocatorReport, filename: str, sk
     # ===================
 
     # Title page
-    if skip_analysis:
-        story.append(Paragraph(f"Similar Stocks to {report.symbol}", title_style))
-        story.append(Paragraph("Comparative Analysis Report", heading_style))
-    else:
-        story.append(Paragraph(f"{analysis.symbol} - {analysis.company_name}", title_style))
-        story.append(Paragraph("Allocator Report", heading_style))
+    story.append(Paragraph(f"{analysis.symbol} - {analysis.company_name}", title_style))
+    story.append(Paragraph("Allocator Report", heading_style))
     story.append(Spacer(1, 0.2 * inch))
 
-    if not skip_analysis:
-        # Recommendation box
-        rec_data = [
-            ["Recommendation:", analysis.recommendation],
-            ["Conviction:", analysis.conviction_level],
-            ["Date:", datetime.now().strftime("%Y-%m-%d %H:%M")],
-        ]
-        rec_table = Table(rec_data, colWidths=[2.0 * inch, 4 * inch])
-        rec_table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f0f0")),
-                    ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("FONTNAME", (0, 0), (0, -1), "DejaVuSans-Bold"),
-                    ("FONTNAME", (1, 0), (1, -1), "DejaVuSans"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 12),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                    ("GRID", (0, 0), (-1, -1), 1, colors.grey),
-                ]
-            )
+    # Recommendation box
+    rec_data = [
+        ["Recommendation:", analysis.recommendation],
+        ["Conviction:", analysis.conviction_level],
+        ["Date:", datetime.now().strftime("%Y-%m-%d %H:%M")],
+    ]
+    rec_table = Table(rec_data, colWidths=[2.0 * inch, 4 * inch])
+    rec_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f0f0")),
+                ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("FONTNAME", (0, 0), (0, -1), "DejaVuSans-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "DejaVuSans"),
+                ("FONTSIZE", (0, 0), (-1, -1), 12),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ]
         )
-        story.append(rec_table)
-        story.append(Spacer(1, 0.3 * inch))
+    )
+    story.append(rec_table)
+    story.append(Spacer(1, 0.3 * inch))
 
-        # Price chart
-        chart_buf = _create_price_chart(report.symbol)
-        if chart_buf:
-            img = Image(chart_buf, width=6 * inch, height=4 * inch)
-            story.append(img)
-            story.append(Spacer(1, 0.2 * inch))
+    # Price chart
+    chart_buf = _create_price_chart(report.symbol)
+    if chart_buf:
+        img = Image(chart_buf, width=6 * inch, height=4 * inch)
+        story.append(img)
+        story.append(Spacer(1, 0.2 * inch))
 
-        story.append(PageBreak())
+    story.append(PageBreak())
 
     # Key Metrics & Signals Section - Unified Comparison Table
     story.append(Paragraph("Key Metrics & Signals - Comparative Analysis", heading_style))
@@ -406,42 +400,41 @@ async def export_allocator_report_pdf(report: AllocatorReport, filename: str, sk
 
     story.append(PageBreak())
 
-    if not skip_analysis:
-        # Investment Thesis
-        story.append(Paragraph("Investment Thesis", heading_style))
-        story.append(Paragraph(analysis.investment_thesis, body_style))
-        story.append(Spacer(1, 0.2 * inch))
+    # Investment Thesis
+    story.append(Paragraph("Investment Thesis", heading_style))
+    story.append(Paragraph(analysis.investment_thesis, body_style))
+    story.append(Spacer(1, 0.2 * inch))
 
-        # Analysis sections
-        sections = [
-            ("Management Quality", analysis.management_quality),
-            ("Capital Allocation", analysis.capital_allocation),
-            ("Financial Quality", analysis.financial_quality),
-            ("Competitive Position", analysis.competitive_position),
-            ("Valuation Assessment", analysis.valuation_assessment),
-            ("Technical Setup", analysis.technical_setup),
-        ]
+    # Analysis sections
+    sections = [
+        ("Management Quality", analysis.management_quality),
+        ("Capital Allocation", analysis.capital_allocation),
+        ("Financial Quality", analysis.financial_quality),
+        ("Competitive Position", analysis.competitive_position),
+        ("Valuation Assessment", analysis.valuation_assessment),
+        ("Technical Setup", analysis.technical_setup),
+    ]
 
-        for section_title, section_content in sections:
-            story.append(Paragraph(section_title, heading_style))
-            story.append(Paragraph(section_content, body_style))
-            story.append(Spacer(1, 0.15 * inch))
+    for section_title, section_content in sections:
+        story.append(Paragraph(section_title, heading_style))
+        story.append(Paragraph(section_content, body_style))
+        story.append(Spacer(1, 0.15 * inch))
 
-        story.append(PageBreak())
+    story.append(PageBreak())
 
-        # Key Positives
-        story.append(Paragraph("Key Positives", heading_style))
-        for positive in analysis.key_positives:
-            story.append(Paragraph(f"• {positive}", body_style))
-            story.append(Spacer(1, 0.05 * inch))
-        story.append(Spacer(1, 0.2 * inch))
+    # Key Positives
+    story.append(Paragraph("Key Positives", heading_style))
+    for positive in analysis.key_positives:
+        story.append(Paragraph(f"• {positive}", body_style))
+        story.append(Spacer(1, 0.05 * inch))
+    story.append(Spacer(1, 0.2 * inch))
 
-        # Key Risks
-        story.append(Paragraph("Key Risks", heading_style))
-        for risk in analysis.key_risks:
-            story.append(Paragraph(f"• {risk}", body_style))
-            story.append(Spacer(1, 0.05 * inch))
-        story.append(Spacer(1, 0.3 * inch))
+    # Key Risks
+    story.append(Paragraph("Key Risks", heading_style))
+    for risk in analysis.key_risks:
+        story.append(Paragraph(f"• {risk}", body_style))
+        story.append(Spacer(1, 0.05 * inch))
+    story.append(Spacer(1, 0.3 * inch))
 
     # ===================
     # PART 2: Similar Stocks
